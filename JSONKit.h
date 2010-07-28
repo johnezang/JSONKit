@@ -43,6 +43,9 @@
 #include <AvailabilityMacros.h>
 
 #ifdef    __OBJC__
+#import <Foundation/NSArray.h>
+#import <Foundation/NSData.h>
+#import <Foundation/NSDictionary.h>
 #import <Foundation/NSError.h>
 #import <Foundation/NSObjCRuntime.h>
 #import <Foundation/NSString.h>
@@ -201,6 +204,16 @@ typedef struct {
 - (id)objectFromJSONString;
 - (id)objectFromJSONStringWithParseOptions:(JKParseOptionFlags)parseOptionFlags;
 - (id)objectFromJSONStringWithParseOptions:(JKParseOptionFlags)parseOptionFlags error:(NSError **)error;
+@end
+
+@interface NSArray (JSONKit)
+- (NSData *)JSONData;
+- (NSString *)JSONString;
+@end
+
+@interface NSDictionary (JSONKit)
+- (NSData *)JSONData;
+- (NSString *)JSONString;
 @end
 
 #endif // __OBJC__

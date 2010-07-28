@@ -86,7 +86,7 @@
 #include <string.h>
 #include <assert.h>
 #include <sys/errno.h>
-
+#include <math.h>
 
 #import "JSONKit.h"
 
@@ -97,8 +97,12 @@
 #include <CoreFoundation/CFNumber.h>
 
 //#import <Foundation/Foundation.h>
+#import <Foundation/NSArray.h>
+#import <Foundation/NSData.h>
 #import <Foundation/NSDictionary.h>
 #import <Foundation/NSException.h>
+#import <Foundation/NSNull.h>
+#import <Foundation/NSScriptClassDescription.h>
 
 // For DJB hash.
 #define JK_HASH_INIT           (5381UL)
@@ -119,6 +123,9 @@
 
 // JK_STACK_OBJS is the default number of spaces reserved on the stack for temporarily storing pointers to Obj-C objects before they can be transfered to a NSArray / NSDictionary.
 #define JK_STACK_OBJS          (1024UL * 1UL)
+
+#define JK_JSONBUFFER_SIZE    (1024UL * 64UL)
+#define JK_UTF8BUFFER_SIZE    (1024UL * 16UL)
 
 
 
@@ -1385,6 +1392,311 @@ static id json_parse_it(JKParseState *parseState) {
   JSONDecoder         *decoder    = [[[JSONDecoder alloc] initWithParseOptions:parseOptionFlags] autorelease];
 
   return([decoder parseUTF8String:utf8String length:utf8Length error:error]);
+}
+
+@end
+
+typedef struct {
+  void *stringClass;
+  void *numberClass;
+  void *arrayClass;
+  void *dictionaryClass;
+  void *nullClass;
+} JKFastClassLookup;
+
+enum {
+  JKClassUnknown = 0,
+  JKClassString = 1,
+  JKClassNumber = 2,
+  JKClassArray = 3,
+  JKClassDictionary= 4,
+  JKClassNull = 5,
+};
+
+typedef struct {
+  JKManagedBuffer   utf8ConversionBuffer;
+  JKManagedBuffer   stringBuffer;
+  size_t            atIndex;
+  JKFastClassLookup fastClassLookup;
+} JKEncodeState;
+
+static int jk_printf(JKEncodeState *encodeState, const char *format, ...) {
+  va_list varArgsList;
+  va_start(varArgsList, format);
+  va_end(varArgsList);
+
+  if(encodeState->stringBuffer.bytes.length < encodeState->atIndex) { return(1); }
+  if((encodeState->stringBuffer.bytes.length - encodeState->atIndex) < 1024L) { if(jk_managedBuffer_resize(&encodeState->stringBuffer, encodeState->atIndex + 4096UL) == NULL) { return(1); } }
+
+  char    *atPtr     = (char *)encodeState->stringBuffer.bytes.ptr    + encodeState->atIndex;
+  ssize_t  remaining =         encodeState->stringBuffer.bytes.length - encodeState->atIndex;
+
+  int printfAdded = vsnprintf(atPtr, remaining, format, varArgsList);
+
+  if(printfAdded > remaining) {
+    if(jk_managedBuffer_resize(&encodeState->stringBuffer, encodeState->atIndex + printfAdded + 1024UL) == NULL) { return(1); }
+    vsnprintf(atPtr, remaining, format, varArgsList);
+  }
+
+  encodeState->atIndex += printfAdded;
+  return(0);
+}
+
+static int jk_write(JKEncodeState *encodeState, const char *format) {
+  if(encodeState->stringBuffer.bytes.length < encodeState->atIndex) { return(1); }
+  if((encodeState->stringBuffer.bytes.length - encodeState->atIndex) < 1024L) { if(jk_managedBuffer_resize(&encodeState->stringBuffer, encodeState->atIndex + 4096UL) == NULL) { return(1); } }
+
+  char    *atPtr     = (char *)encodeState->stringBuffer.bytes.ptr    + encodeState->atIndex;
+  ssize_t  remaining =         encodeState->stringBuffer.bytes.length - encodeState->atIndex;
+
+  ssize_t idx = 0L, added = 0L;
+  for(added = 0L, idx = 0L; format[added] != 0; added++) { if(idx < remaining) { atPtr[idx++] = format[added]; } }
+
+  if(added > remaining) {
+    if(jk_managedBuffer_resize(&encodeState->stringBuffer, encodeState->atIndex + added + 1024UL) == NULL) { return(1); }
+    for(added = 0L, idx = 0L; format[added] != 0; added++) { if(idx < remaining) { atPtr[idx++] = format[added]; } }
+  }
+
+  atPtr[idx] = 0;
+  encodeState->atIndex += added;
+  return(0);
+}
+
+
+
+static int jk_add_atom_to_buffer(JKEncodeState *encodeState, void *objectPtr) {
+  NSCParameterAssert((encodeState != NULL) && (objectPtr != NULL));
+  NSCParameterAssert(encodeState->atIndex < encodeState->stringBuffer.bytes.length);
+
+  id object = objectPtr;
+
+  if(((encodeState->atIndex + 256UL) > encodeState->stringBuffer.bytes.length) && (jk_managedBuffer_resize(&encodeState->stringBuffer, encodeState->atIndex + 256UL) == NULL)) { return(1); }
+
+  int isClass = JKClassUnknown;
+
+       if(object->isa == encodeState->fastClassLookup.stringClass)     { isClass = JKClassString;     }
+  else if(object->isa == encodeState->fastClassLookup.numberClass)     { isClass = JKClassNumber;     }
+  else if(object->isa == encodeState->fastClassLookup.arrayClass)      { isClass = JKClassArray;      }
+  else if(object->isa == encodeState->fastClassLookup.dictionaryClass) { isClass = JKClassDictionary; }
+  else if(object->isa == encodeState->fastClassLookup.nullClass)       { isClass = JKClassNull;       }
+  else {
+         if([object isKindOfClass:[NSString     class]]) { encodeState->fastClassLookup.stringClass     = object->isa; isClass = JKClassString;     }
+    else if([object isKindOfClass:[NSNumber     class]]) { encodeState->fastClassLookup.numberClass     = object->isa; isClass = JKClassNumber;     }
+    else if([object isKindOfClass:[NSArray      class]]) { encodeState->fastClassLookup.arrayClass      = object->isa; isClass = JKClassArray;      }
+    else if([object isKindOfClass:[NSDictionary class]]) { encodeState->fastClassLookup.dictionaryClass = object->isa; isClass = JKClassDictionary; }
+    else if([object isKindOfClass:[NSNull       class]]) { encodeState->fastClassLookup.nullClass       = object->isa; isClass = JKClassNull;       }
+  }
+
+  switch(isClass) {
+    case JKClassString:
+      {
+        {
+          const unsigned char *cStringPtr = (const unsigned char *)CFStringGetCStringPtr((CFStringRef)object, kCFStringEncodingMacRoman);
+          if(cStringPtr != NULL) {
+            unsigned char *atPtr = encodeState->stringBuffer.bytes.ptr + encodeState->atIndex;
+            const unsigned char *utf8String = cStringPtr;
+          
+            size_t utf8Idx = 0UL, added = 0UL;
+            atPtr[added++] = '\"';
+            for(utf8Idx = 0UL; utf8String[utf8Idx] != 0; utf8Idx++) {
+              NSCParameterAssert(((&encodeState->stringBuffer.bytes.ptr[encodeState->atIndex + added]) - encodeState->stringBuffer.bytes.ptr) < encodeState->stringBuffer.bytes.length);
+              NSCParameterAssert(encodeState->atIndex < encodeState->stringBuffer.bytes.length);
+              if(((encodeState->atIndex + added + 256UL) > encodeState->stringBuffer.bytes.length)) {
+                if((jk_managedBuffer_resize(&encodeState->stringBuffer, encodeState->atIndex + added + 1024UL) == NULL)) { return(1); }
+                atPtr = encodeState->stringBuffer.bytes.ptr + encodeState->atIndex;
+              }
+              if(utf8String[utf8Idx] >= 0x80) { goto slowUTF8Path; }
+              if(utf8String[utf8Idx] < 0x20) {
+                switch(utf8String[utf8Idx]) {
+                  case '\b': atPtr[added++] = '\\'; atPtr[added++] = 'b'; break;
+                  case '\f': atPtr[added++] = '\\'; atPtr[added++] = 'f'; break;
+                  case '\n': atPtr[added++] = '\\'; atPtr[added++] = 'n'; break;
+                  case '\r': atPtr[added++] = '\\'; atPtr[added++] = 'r'; break;
+                  case '\t': atPtr[added++] = '\\'; atPtr[added++] = 't'; break;
+                  default: jk_printf(encodeState, "\\u%4.4x", utf8String[utf8Idx]); break;
+                }
+              } else {
+                if((utf8String[utf8Idx] == '\"') || (utf8String[utf8Idx] == '\\')) { atPtr[added++] = '\\'; }
+                atPtr[added++] = utf8String[utf8Idx];
+              }
+            }
+            atPtr[added++] = '\"';
+            atPtr[added] = 0;
+            encodeState->atIndex += added;
+            return(0);
+          }
+        }
+
+      slowUTF8Path:
+        {
+          CFIndex stringLength = CFStringGetLength((CFStringRef)object);
+          CFIndex maxStringUTF8Length = CFStringGetMaximumSizeForEncoding(stringLength, kCFStringEncodingUTF8) + 32L;
+        
+          if(((size_t)maxStringUTF8Length > encodeState->utf8ConversionBuffer.bytes.length) && (jk_managedBuffer_resize(&encodeState->utf8ConversionBuffer, maxStringUTF8Length + 1024UL) == NULL)) { return(1); }
+        
+          CFIndex usedBytes = 0L, convertedCount = 0L;
+          convertedCount = CFStringGetBytes((CFStringRef)object, CFRangeMake(0L, stringLength), kCFStringEncodingUTF8, '?', NO, encodeState->utf8ConversionBuffer.bytes.ptr, encodeState->utf8ConversionBuffer.bytes.length - 16L, &usedBytes);
+          encodeState->utf8ConversionBuffer.bytes.ptr[usedBytes] = 0;
+        
+          if(((encodeState->atIndex + maxStringUTF8Length) > encodeState->stringBuffer.bytes.length) && (jk_managedBuffer_resize(&encodeState->stringBuffer, encodeState->atIndex + maxStringUTF8Length + 1024UL) == NULL)) { return(1); }
+        
+          unsigned char *atPtr = encodeState->stringBuffer.bytes.ptr + encodeState->atIndex;
+          const unsigned char *utf8String = encodeState->utf8ConversionBuffer.bytes.ptr;
+        
+          size_t utf8Idx = 0UL, added = 0UL;
+          atPtr[added++] = '\"';
+          for(utf8Idx = 0UL; utf8String[utf8Idx] != 0; utf8Idx++) {
+            NSCParameterAssert(((&encodeState->stringBuffer.bytes.ptr[encodeState->atIndex + added]) - encodeState->stringBuffer.bytes.ptr) < encodeState->stringBuffer.bytes.length);
+            NSCParameterAssert(encodeState->atIndex < encodeState->stringBuffer.bytes.length);
+            NSCParameterAssert((CFIndex)utf8Idx < usedBytes);
+            if(((encodeState->atIndex + added + 256UL) > encodeState->stringBuffer.bytes.length)) {
+              if((jk_managedBuffer_resize(&encodeState->stringBuffer, encodeState->atIndex + added + 1024UL) == NULL)) { return(1); }
+              atPtr = encodeState->stringBuffer.bytes.ptr + encodeState->atIndex;
+            }
+            if(utf8String[utf8Idx] < 0x20) {
+              switch(utf8String[utf8Idx]) {
+                case '\b': atPtr[added++] = '\\'; atPtr[added++] = 'b'; break;
+                case '\f': atPtr[added++] = '\\'; atPtr[added++] = 'f'; break;
+                case '\n': atPtr[added++] = '\\'; atPtr[added++] = 'n'; break;
+                case '\r': atPtr[added++] = '\\'; atPtr[added++] = 'r'; break;
+                case '\t': atPtr[added++] = '\\'; atPtr[added++] = 't'; break;
+                default: jk_printf(encodeState, "\\u%4.4x", utf8String[utf8Idx]); break;
+              }
+            } else {
+              if((utf8String[utf8Idx] == '\"') || (utf8String[utf8Idx] == '\\')) { atPtr[added++] = '\\'; }
+              atPtr[added++] = utf8String[utf8Idx];
+            }
+          }
+          atPtr[added++] = '\"';
+          atPtr[added] = 0;
+          encodeState->atIndex += added;
+          return(0);
+        }
+      }
+      break;
+
+    case JKClassNumber:
+      {
+        if(object == (id)kCFBooleanTrue) { return(jk_write(encodeState, "true")); break; } else if(object == (id)kCFBooleanFalse) { return(jk_write(encodeState, "false")); break; }
+
+        long long llv;
+        unsigned long long ullv;
+      
+        const char *objCType = [object objCType];
+        switch(objCType[0]) {
+          case 'B':
+          case 'c':
+            if(object == (id)kCFBooleanTrue) { return(jk_write(encodeState, "true")); }
+            else if(object == (id)kCFBooleanFalse) { return(jk_write(encodeState, "false")); }
+            else { if(CFNumberGetValue((CFNumberRef)object, kCFNumberLongLongType, &llv))  { return(jk_printf(encodeState, "%lld", llv));  } else { return(1); } }
+            break;
+                    case 'i': case 's': case 'l': case 'q':  if(CFNumberGetValue((CFNumberRef)object, kCFNumberLongLongType, &llv))  { return(jk_printf(encodeState, "%lld", llv));  } else { return(1); } break;
+          case 'C': case 'I': case 'S': case 'L': case 'Q':  if(CFNumberGetValue((CFNumberRef)object, kCFNumberLongLongType, &ullv)) { return(jk_printf(encodeState, "%llu", ullv)); } else { return(1); } break;
+
+          case 'f': case 'd':
+            {
+              double dv;
+              if(CFNumberGetValue((CFNumberRef)object, kCFNumberDoubleType, &dv)) {
+                if(!isfinite(dv)) { return(1); }
+                return(jk_printf(encodeState, "%.16g", dv));
+              }
+            }
+            break;
+          default: jk_printf(encodeState, "/* NSNumber conversion error.  Type: '%c' / 0x%2.2x */", objCType[0], objCType[0]); return(1); break;
+        }
+      }
+      break;
+    
+    case JKClassArray:
+      {
+        int printComma = 0;
+        CFIndex arrayCount = CFArrayGetCount((CFArrayRef)object), idx = 0L;
+        if(jk_write(encodeState, "[")) { return(1); }
+        if(arrayCount > 256L) {
+          for(id arrayObject in object) { if(printComma) { if(jk_write(encodeState, ",")) { return(1); } } printComma = 1; if(jk_add_atom_to_buffer(encodeState, arrayObject)) { return(1); } }
+        } else {
+          void *objects[256];
+          CFArrayGetValues((CFArrayRef)object, CFRangeMake(0L, arrayCount), (const void **)objects);
+          for(idx = 0L; idx < arrayCount; idx++) { if(printComma) { if(jk_write(encodeState, ",")) { return(1); } } printComma = 1; if(jk_add_atom_to_buffer(encodeState, objects[idx])) { return(1); } }
+        }
+        if(jk_write(encodeState, "]")) { return(1); }
+      }
+      break;
+    case JKClassDictionary:
+      {
+        int printComma = 0;
+        CFIndex dictionaryCount = CFDictionaryGetCount((CFDictionaryRef)object), idx = 0L;
+
+        if(jk_write(encodeState, "{")) { return(1); }
+        if(dictionaryCount > 256L) {
+          for(id keyObject in object) { if(printComma) { if(jk_write(encodeState, ",")) { return(1); } } printComma = 1; if(jk_add_atom_to_buffer(encodeState, keyObject)) { return(1); } if(jk_write(encodeState, ":")) { return(1); } if(jk_add_atom_to_buffer(encodeState, [object objectForKey:keyObject])) { return(1); } }
+        } else {
+          void *keys[256], *objects[256];
+          CFDictionaryGetKeysAndValues((CFDictionaryRef)object, (const void **)keys, (const void **)objects);
+          for(idx = 0L; idx < dictionaryCount; idx++) { if(printComma) { if(jk_write(encodeState, ",")) { return(1); } } printComma = 1; if(jk_add_atom_to_buffer(encodeState, keys[idx])) { return(1); } if(jk_write(encodeState, ":")) { return(1); } if(jk_add_atom_to_buffer(encodeState, objects[idx])) { return(1); } }
+        }
+        if(jk_write(encodeState, "}")) { return(1); }
+      }
+      break;
+
+    case JKClassNull: if(jk_write(encodeState, "null")) { return(1); } break;
+
+    default: jk_printf(encodeState, "/* Unable to convert class type of '%s' */", [[object className] UTF8String]); return(1); break;
+  }
+
+
+  return(0);
+}
+
+
+static NSData *jk_encode(void *object) {
+  JKEncodeState encodeState;
+  memset(&encodeState, 0, sizeof(JKEncodeState));
+
+  encodeState.stringBuffer.roundSizeUpToMultipleOf         = (1024UL * 32UL);
+  encodeState.utf8ConversionBuffer.roundSizeUpToMultipleOf = 4096UL;
+
+  unsigned char stackJSONBuffer[JK_JSONBUFFER_SIZE] JK_ALIGNED(64);
+  jk_managedBuffer_setToStackBuffer(&encodeState.stringBuffer, stackJSONBuffer, sizeof(stackJSONBuffer));
+
+  unsigned char stackUTF8Buffer[JK_UTF8BUFFER_SIZE] JK_ALIGNED(64);
+  jk_managedBuffer_setToStackBuffer(&encodeState.utf8ConversionBuffer, stackUTF8Buffer, sizeof(stackUTF8Buffer));
+
+  NSData *jsonData = NULL;
+  if(jk_add_atom_to_buffer(&encodeState, object) == 0) { jsonData = [NSData dataWithBytes:encodeState.stringBuffer.bytes.ptr length:encodeState.atIndex]; }
+
+  jk_managedBuffer_release(&encodeState.stringBuffer);
+  jk_managedBuffer_release(&encodeState.utf8ConversionBuffer);
+
+  return(jsonData);
+}
+
+
+@implementation NSArray (JSONKit)
+
+- (NSData *)JSONData
+{
+  return(jk_encode(self));
+}
+
+- (NSString *)JSONString
+{
+  return([[[NSString alloc] initWithData:[self JSONData] encoding:NSUTF8StringEncoding] autorelease]);
+}
+
+@end
+
+@implementation NSDictionary (JSONKit)
+
+
+- (NSData *)JSONData
+{
+  return(jk_encode(self));
+}
+
+- (NSString *)JSONString
+{
+  return([[[NSString alloc] initWithData:[self JSONData] encoding:NSUTF8StringEncoding] autorelease]);
 }
 
 @end
