@@ -185,6 +185,15 @@ typedef struct {
 } JKParseState;
 
 
+enum {
+  JKSerializeOptionNone           = 0,
+  JKSerializeOptionPretty         = (1 << 0),
+  JKSerializeOptionEscapeUnicode  = (1 << 1),
+  JKSerializeOptionValidFlags     = (JKSerializeOptionPretty | JKSerializeOptionEscapeUnicode),
+};
+typedef JKFlags JKSerializeOptionFlags;
+
+
 #ifdef    __OBJC__
 
 // As a general rule of thumb, if you use a method that doesn't accept a JKParseOptionFlags argument, it defaults to JKParseOptionStrict
@@ -208,12 +217,16 @@ typedef struct {
 
 @interface NSArray (JSONKit)
 - (NSData *)JSONData;
+- (NSData *)JSONDataWithOptions:(JKSerializeOptionFlags)serializeOptions error:(NSError **)error;
 - (NSString *)JSONString;
+- (NSString *)JSONStringWithOptions:(JKSerializeOptionFlags)serializeOptions error:(NSError **)error;
 @end
 
 @interface NSDictionary (JSONKit)
 - (NSData *)JSONData;
+- (NSData *)JSONDataWithOptions:(JKSerializeOptionFlags)serializeOptions error:(NSError **)error;
 - (NSString *)JSONString;
+- (NSString *)JSONStringWithOptions:(JKSerializeOptionFlags)serializeOptions error:(NSError **)error;
 @end
 
 #endif // __OBJC__

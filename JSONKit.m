@@ -253,6 +253,35 @@ enum {
   JKParseAcceptCommaOrEnd = (JKParseAcceptComma | JKParseAcceptEnd),
 };
 
+
+typedef struct {
+  void *stringClass;
+  void *numberClass;
+  void *arrayClass;
+  void *dictionaryClass;
+  void *nullClass;
+} JKFastClassLookup;
+
+enum {
+  JKClassUnknown    = 0,
+  JKClassString     = 1,
+  JKClassNumber     = 2,
+  JKClassArray      = 3,
+  JKClassDictionary = 4,
+  JKClassNull       = 5,
+};
+
+typedef struct {
+  JKManagedBuffer         utf8ConversionBuffer;
+  JKManagedBuffer         stringBuffer;
+  size_t                  atIndex;
+  JKFastClassLookup       fastClassLookup;
+  JKSerializeOptionFlags  serializeOptionFlags;
+  NSError                *error;
+} JKEncodeState;
+
+
+
 #define UNI_REPLACEMENT_CHAR (UTF32)0x0000FFFD
 #define UNI_MAX_BMP          (UTF32)0x0000FFFF
 #define UNI_MAX_UTF16        (UTF32)0x0010FFFF
@@ -1396,37 +1425,42 @@ static id json_parse_it(JKParseState *parseState) {
 
 @end
 
-typedef struct {
-  void *stringClass;
-  void *numberClass;
-  void *arrayClass;
-  void *dictionaryClass;
-  void *nullClass;
-} JKFastClassLookup;
 
-enum {
-  JKClassUnknown = 0,
-  JKClassString = 1,
-  JKClassNumber = 2,
-  JKClassArray = 3,
-  JKClassDictionary= 4,
-  JKClassNull = 5,
-};
 
-typedef struct {
-  JKManagedBuffer   utf8ConversionBuffer;
-  JKManagedBuffer   stringBuffer;
-  size_t            atIndex;
-  JKFastClassLookup fastClassLookup;
-} JKEncodeState;
 
-static int jk_printf(JKEncodeState *encodeState, const char *format, ...) {
+
+
+
+
+
+
+
+
+static void jk_encode_error(JKEncodeState *encodeState, NSString *format, ...) {
+  NSCParameterAssert((encodeState != NULL) && (format != NULL));
+
+  va_list varArgsList;
+  va_start(varArgsList, format);
+  NSString *formatString = [[[NSString alloc] initWithFormat:format arguments:varArgsList] autorelease];
+  va_end(varArgsList);
+
+  if(encodeState->error == NULL) {
+    encodeState->error = [NSError errorWithDomain:@"JKErrorDomain" code:-1L userInfo:
+                                   [NSDictionary dictionaryWithObjectsAndKeys:
+                                                                              formatString, NSLocalizedDescriptionKey,
+                                                                              NULL]];
+  }
+}
+
+
+
+static int jk_encode_printf(JKEncodeState *encodeState, const char *format, ...) {
   va_list varArgsList;
   va_start(varArgsList, format);
   va_end(varArgsList);
 
-  if(encodeState->stringBuffer.bytes.length < encodeState->atIndex) { return(1); }
-  if((encodeState->stringBuffer.bytes.length - encodeState->atIndex) < 1024L) { if(jk_managedBuffer_resize(&encodeState->stringBuffer, encodeState->atIndex + 4096UL) == NULL) { return(1); } }
+  if(encodeState->stringBuffer.bytes.length < encodeState->atIndex) { jk_encode_error(encodeState, @"Internal inconsistency error: atIndex > buffer length."); return(1); }
+  if((encodeState->stringBuffer.bytes.length - encodeState->atIndex) < 1024L) { if(jk_managedBuffer_resize(&encodeState->stringBuffer, encodeState->atIndex + 4096UL) == NULL) { jk_encode_error(encodeState, @"Unable to resize temporary buffer."); return(1); } }
 
   char    *atPtr     = (char *)encodeState->stringBuffer.bytes.ptr    + encodeState->atIndex;
   ssize_t  remaining =         encodeState->stringBuffer.bytes.length - encodeState->atIndex;
@@ -1434,7 +1468,7 @@ static int jk_printf(JKEncodeState *encodeState, const char *format, ...) {
   int printfAdded = vsnprintf(atPtr, remaining, format, varArgsList);
 
   if(printfAdded > remaining) {
-    if(jk_managedBuffer_resize(&encodeState->stringBuffer, encodeState->atIndex + printfAdded + 1024UL) == NULL) { return(1); }
+    if(jk_managedBuffer_resize(&encodeState->stringBuffer, encodeState->atIndex + printfAdded + 1024UL) == NULL) { jk_encode_error(encodeState, @"Unable to resize temporary buffer."); return(1); }
     vsnprintf(atPtr, remaining, format, varArgsList);
   }
 
@@ -1442,9 +1476,9 @@ static int jk_printf(JKEncodeState *encodeState, const char *format, ...) {
   return(0);
 }
 
-static int jk_write(JKEncodeState *encodeState, const char *format) {
-  if(encodeState->stringBuffer.bytes.length < encodeState->atIndex) { return(1); }
-  if((encodeState->stringBuffer.bytes.length - encodeState->atIndex) < 1024L) { if(jk_managedBuffer_resize(&encodeState->stringBuffer, encodeState->atIndex + 4096UL) == NULL) { return(1); } }
+static int jk_encode_write(JKEncodeState *encodeState, const char *format) {
+  if(encodeState->stringBuffer.bytes.length < encodeState->atIndex) { jk_encode_error(encodeState, @"Internal inconsistency error: atIndex > buffer length."); return(1); }
+  if((encodeState->stringBuffer.bytes.length - encodeState->atIndex) < 1024L) { if(jk_managedBuffer_resize(&encodeState->stringBuffer, encodeState->atIndex + 4096UL) == NULL) { jk_encode_error(encodeState, @"Unable to resize temporary buffer."); return(1); } }
 
   char    *atPtr     = (char *)encodeState->stringBuffer.bytes.ptr    + encodeState->atIndex;
   ssize_t  remaining =         encodeState->stringBuffer.bytes.length - encodeState->atIndex;
@@ -1453,7 +1487,7 @@ static int jk_write(JKEncodeState *encodeState, const char *format) {
   for(added = 0L, idx = 0L; format[added] != 0; added++) { if(idx < remaining) { atPtr[idx++] = format[added]; } }
 
   if(added > remaining) {
-    if(jk_managedBuffer_resize(&encodeState->stringBuffer, encodeState->atIndex + added + 1024UL) == NULL) { return(1); }
+    if(jk_managedBuffer_resize(&encodeState->stringBuffer, encodeState->atIndex + added + 1024UL) == NULL) { jk_encode_error(encodeState, @"Unable to resize temporary buffer."); return(1); }
     for(added = 0L, idx = 0L; format[added] != 0; added++) { if(idx < remaining) { atPtr[idx++] = format[added]; } }
   }
 
@@ -1464,13 +1498,13 @@ static int jk_write(JKEncodeState *encodeState, const char *format) {
 
 
 
-static int jk_add_atom_to_buffer(JKEncodeState *encodeState, void *objectPtr) {
+static int jk_encode_add_atom_to_buffer(JKEncodeState *encodeState, void *objectPtr) {
   NSCParameterAssert((encodeState != NULL) && (objectPtr != NULL));
   NSCParameterAssert(encodeState->atIndex < encodeState->stringBuffer.bytes.length);
 
   id object = objectPtr;
 
-  if(((encodeState->atIndex + 256UL) > encodeState->stringBuffer.bytes.length) && (jk_managedBuffer_resize(&encodeState->stringBuffer, encodeState->atIndex + 256UL) == NULL)) { return(1); }
+  if(((encodeState->atIndex + 256UL) > encodeState->stringBuffer.bytes.length) && (jk_managedBuffer_resize(&encodeState->stringBuffer, encodeState->atIndex + 256UL) == NULL)) { jk_encode_error(encodeState, @"Unable to resize temporary buffer."); return(1); }
 
   int isClass = JKClassUnknown;
 
@@ -1485,6 +1519,7 @@ static int jk_add_atom_to_buffer(JKEncodeState *encodeState, void *objectPtr) {
     else if([object isKindOfClass:[NSArray      class]]) { encodeState->fastClassLookup.arrayClass      = object->isa; isClass = JKClassArray;      }
     else if([object isKindOfClass:[NSDictionary class]]) { encodeState->fastClassLookup.dictionaryClass = object->isa; isClass = JKClassDictionary; }
     else if([object isKindOfClass:[NSNull       class]]) { encodeState->fastClassLookup.nullClass       = object->isa; isClass = JKClassNull;       }
+    else { jk_encode_error(encodeState, @"Unable to serialize object class %@.", [object className]); return(1); }
   }
 
   switch(isClass) {
@@ -1493,36 +1528,34 @@ static int jk_add_atom_to_buffer(JKEncodeState *encodeState, void *objectPtr) {
         {
           const unsigned char *cStringPtr = (const unsigned char *)CFStringGetCStringPtr((CFStringRef)object, kCFStringEncodingMacRoman);
           if(cStringPtr != NULL) {
-            unsigned char *atPtr = encodeState->stringBuffer.bytes.ptr + encodeState->atIndex;
+            size_t startingAtIndex = encodeState->atIndex;
             const unsigned char *utf8String = cStringPtr;
-          
-            size_t utf8Idx = 0UL, added = 0UL;
-            atPtr[added++] = '\"';
+            size_t utf8Idx = 0UL;
+
+            encodeState->stringBuffer.bytes.ptr[encodeState->atIndex++] = '\"';
             for(utf8Idx = 0UL; utf8String[utf8Idx] != 0; utf8Idx++) {
-              NSCParameterAssert(((&encodeState->stringBuffer.bytes.ptr[encodeState->atIndex + added]) - encodeState->stringBuffer.bytes.ptr) < encodeState->stringBuffer.bytes.length);
+              NSCParameterAssert(((&encodeState->stringBuffer.bytes.ptr[encodeState->atIndex]) - encodeState->stringBuffer.bytes.ptr) < encodeState->stringBuffer.bytes.length);
               NSCParameterAssert(encodeState->atIndex < encodeState->stringBuffer.bytes.length);
-              if(((encodeState->atIndex + added + 256UL) > encodeState->stringBuffer.bytes.length)) {
-                if((jk_managedBuffer_resize(&encodeState->stringBuffer, encodeState->atIndex + added + 1024UL) == NULL)) { return(1); }
-                atPtr = encodeState->stringBuffer.bytes.ptr + encodeState->atIndex;
+              if(((encodeState->atIndex + 256UL) > encodeState->stringBuffer.bytes.length)) {
+                if((jk_managedBuffer_resize(&encodeState->stringBuffer, encodeState->atIndex + 1024UL) == NULL)) { jk_encode_error(encodeState, @"Unable to resize temporary buffer."); return(1); }
               }
-              if(utf8String[utf8Idx] >= 0x80) { goto slowUTF8Path; }
+              if(utf8String[utf8Idx] >= 0x80) { encodeState->atIndex = startingAtIndex; goto slowUTF8Path; }
               if(utf8String[utf8Idx] < 0x20) {
                 switch(utf8String[utf8Idx]) {
-                  case '\b': atPtr[added++] = '\\'; atPtr[added++] = 'b'; break;
-                  case '\f': atPtr[added++] = '\\'; atPtr[added++] = 'f'; break;
-                  case '\n': atPtr[added++] = '\\'; atPtr[added++] = 'n'; break;
-                  case '\r': atPtr[added++] = '\\'; atPtr[added++] = 'r'; break;
-                  case '\t': atPtr[added++] = '\\'; atPtr[added++] = 't'; break;
-                  default: jk_printf(encodeState, "\\u%4.4x", utf8String[utf8Idx]); break;
+                  case '\b': encodeState->stringBuffer.bytes.ptr[encodeState->atIndex++] = '\\'; encodeState->stringBuffer.bytes.ptr[encodeState->atIndex++] = 'b'; break;
+                  case '\f': encodeState->stringBuffer.bytes.ptr[encodeState->atIndex++] = '\\'; encodeState->stringBuffer.bytes.ptr[encodeState->atIndex++] = 'f'; break;
+                  case '\n': encodeState->stringBuffer.bytes.ptr[encodeState->atIndex++] = '\\'; encodeState->stringBuffer.bytes.ptr[encodeState->atIndex++] = 'n'; break;
+                  case '\r': encodeState->stringBuffer.bytes.ptr[encodeState->atIndex++] = '\\'; encodeState->stringBuffer.bytes.ptr[encodeState->atIndex++] = 'r'; break;
+                  case '\t': encodeState->stringBuffer.bytes.ptr[encodeState->atIndex++] = '\\'; encodeState->stringBuffer.bytes.ptr[encodeState->atIndex++] = 't'; break;
+                  default: if(jk_encode_printf(encodeState, "\\u%4.4x", utf8String[utf8Idx])) { return(1); } break;
                 }
               } else {
-                if((utf8String[utf8Idx] == '\"') || (utf8String[utf8Idx] == '\\')) { atPtr[added++] = '\\'; }
-                atPtr[added++] = utf8String[utf8Idx];
+                if((utf8String[utf8Idx] == '\"') || (utf8String[utf8Idx] == '\\')) { encodeState->stringBuffer.bytes.ptr[encodeState->atIndex++] = '\\'; }
+                encodeState->stringBuffer.bytes.ptr[encodeState->atIndex++] = utf8String[utf8Idx];
               }
             }
-            atPtr[added++] = '\"';
-            atPtr[added] = 0;
-            encodeState->atIndex += added;
+            encodeState->stringBuffer.bytes.ptr[encodeState->atIndex++] = '\"';
+            encodeState->stringBuffer.bytes.ptr[encodeState->atIndex] = 0;
             return(0);
           }
         }
@@ -1532,44 +1565,54 @@ static int jk_add_atom_to_buffer(JKEncodeState *encodeState, void *objectPtr) {
           CFIndex stringLength = CFStringGetLength((CFStringRef)object);
           CFIndex maxStringUTF8Length = CFStringGetMaximumSizeForEncoding(stringLength, kCFStringEncodingUTF8) + 32L;
         
-          if(((size_t)maxStringUTF8Length > encodeState->utf8ConversionBuffer.bytes.length) && (jk_managedBuffer_resize(&encodeState->utf8ConversionBuffer, maxStringUTF8Length + 1024UL) == NULL)) { return(1); }
+          if(((size_t)maxStringUTF8Length > encodeState->utf8ConversionBuffer.bytes.length) && (jk_managedBuffer_resize(&encodeState->utf8ConversionBuffer, maxStringUTF8Length + 1024UL) == NULL)) { jk_encode_error(encodeState, @"Unable to resize temporary buffer."); return(1); }
         
           CFIndex usedBytes = 0L, convertedCount = 0L;
           convertedCount = CFStringGetBytes((CFStringRef)object, CFRangeMake(0L, stringLength), kCFStringEncodingUTF8, '?', NO, encodeState->utf8ConversionBuffer.bytes.ptr, encodeState->utf8ConversionBuffer.bytes.length - 16L, &usedBytes);
           encodeState->utf8ConversionBuffer.bytes.ptr[usedBytes] = 0;
         
-          if(((encodeState->atIndex + maxStringUTF8Length) > encodeState->stringBuffer.bytes.length) && (jk_managedBuffer_resize(&encodeState->stringBuffer, encodeState->atIndex + maxStringUTF8Length + 1024UL) == NULL)) { return(1); }
+          if(((encodeState->atIndex + maxStringUTF8Length) > encodeState->stringBuffer.bytes.length) && (jk_managedBuffer_resize(&encodeState->stringBuffer, encodeState->atIndex + maxStringUTF8Length + 1024UL) == NULL)) { jk_encode_error(encodeState, @"Unable to resize temporary buffer."); return(1); }
         
-          unsigned char *atPtr = encodeState->stringBuffer.bytes.ptr + encodeState->atIndex;
           const unsigned char *utf8String = encodeState->utf8ConversionBuffer.bytes.ptr;
         
-          size_t utf8Idx = 0UL, added = 0UL;
-          atPtr[added++] = '\"';
+          size_t utf8Idx = 0UL;
+          encodeState->stringBuffer.bytes.ptr[encodeState->atIndex++] = '\"';
           for(utf8Idx = 0UL; utf8String[utf8Idx] != 0; utf8Idx++) {
-            NSCParameterAssert(((&encodeState->stringBuffer.bytes.ptr[encodeState->atIndex + added]) - encodeState->stringBuffer.bytes.ptr) < encodeState->stringBuffer.bytes.length);
+            NSCParameterAssert(((&encodeState->stringBuffer.bytes.ptr[encodeState->atIndex]) - encodeState->stringBuffer.bytes.ptr) < encodeState->stringBuffer.bytes.length);
             NSCParameterAssert(encodeState->atIndex < encodeState->stringBuffer.bytes.length);
             NSCParameterAssert((CFIndex)utf8Idx < usedBytes);
-            if(((encodeState->atIndex + added + 256UL) > encodeState->stringBuffer.bytes.length)) {
-              if((jk_managedBuffer_resize(&encodeState->stringBuffer, encodeState->atIndex + added + 1024UL) == NULL)) { return(1); }
-              atPtr = encodeState->stringBuffer.bytes.ptr + encodeState->atIndex;
+            if(((encodeState->atIndex + 256UL) > encodeState->stringBuffer.bytes.length)) {
+              if((jk_managedBuffer_resize(&encodeState->stringBuffer, encodeState->atIndex + 1024UL) == NULL)) { jk_encode_error(encodeState, @"Unable to resize temporary buffer."); return(1); }
             }
             if(utf8String[utf8Idx] < 0x20) {
               switch(utf8String[utf8Idx]) {
-                case '\b': atPtr[added++] = '\\'; atPtr[added++] = 'b'; break;
-                case '\f': atPtr[added++] = '\\'; atPtr[added++] = 'f'; break;
-                case '\n': atPtr[added++] = '\\'; atPtr[added++] = 'n'; break;
-                case '\r': atPtr[added++] = '\\'; atPtr[added++] = 'r'; break;
-                case '\t': atPtr[added++] = '\\'; atPtr[added++] = 't'; break;
-                default: jk_printf(encodeState, "\\u%4.4x", utf8String[utf8Idx]); break;
+                case '\b': encodeState->stringBuffer.bytes.ptr[encodeState->atIndex++] = '\\'; encodeState->stringBuffer.bytes.ptr[encodeState->atIndex++] = 'b'; break;
+                case '\f': encodeState->stringBuffer.bytes.ptr[encodeState->atIndex++] = '\\'; encodeState->stringBuffer.bytes.ptr[encodeState->atIndex++] = 'f'; break;
+                case '\n': encodeState->stringBuffer.bytes.ptr[encodeState->atIndex++] = '\\'; encodeState->stringBuffer.bytes.ptr[encodeState->atIndex++] = 'n'; break;
+                case '\r': encodeState->stringBuffer.bytes.ptr[encodeState->atIndex++] = '\\'; encodeState->stringBuffer.bytes.ptr[encodeState->atIndex++] = 'r'; break;
+                case '\t': encodeState->stringBuffer.bytes.ptr[encodeState->atIndex++] = '\\'; encodeState->stringBuffer.bytes.ptr[encodeState->atIndex++] = 't'; break;
+                default: if(jk_encode_printf(encodeState, "\\u%4.4x", utf8String[utf8Idx])) { return(1); } break;
               }
             } else {
-              if((utf8String[utf8Idx] == '\"') || (utf8String[utf8Idx] == '\\')) { atPtr[added++] = '\\'; }
-              atPtr[added++] = utf8String[utf8Idx];
+              if((encodeState->serializeOptionFlags & JKSerializeOptionEscapeUnicode) && (utf8String[utf8Idx] >= 0x80)) {
+                const unsigned char *nextValidCharacter = NULL;
+                UTF32                u32ch              = 0UL;
+                ConversionResult     result;
+
+                if(JK_EXPECTED((result = ConvertSingleCodePointInUTF8(&utf8String[utf8Idx], &utf8String[usedBytes], (UTF8 const **)&nextValidCharacter, &u32ch)) != conversionOK, 0L)) { jk_encode_error(encodeState, @"Error converting UTF8."); return(1); }
+                else {
+                  utf8Idx = (nextValidCharacter - utf8String) - 1L;
+                  if(u32ch <= 0xffff) { if(jk_encode_printf(encodeState, "\\u%4.4x", u32ch))                                                        { return(1); } }
+                  else                { if(jk_encode_printf(encodeState, "\\u%4.4x\\u%4.4x", (0xd7c0 + (u32ch >> 10)), (0xdc00 + (u32ch & 0x3ff)))) { return(1); } }
+                }
+              } else {
+                if((utf8String[utf8Idx] == '\"') || (utf8String[utf8Idx] == '\\')) { encodeState->stringBuffer.bytes.ptr[encodeState->atIndex++] = '\\'; }
+                encodeState->stringBuffer.bytes.ptr[encodeState->atIndex++] = utf8String[utf8Idx];
+              }
             }
           }
-          atPtr[added++] = '\"';
-          atPtr[added] = 0;
-          encodeState->atIndex += added;
+          encodeState->stringBuffer.bytes.ptr[encodeState->atIndex++] = '\"';
+          encodeState->stringBuffer.bytes.ptr[encodeState->atIndex]   = 0;
           return(0);
         }
       }
@@ -1577,7 +1620,7 @@ static int jk_add_atom_to_buffer(JKEncodeState *encodeState, void *objectPtr) {
 
     case JKClassNumber:
       {
-        if(object == (id)kCFBooleanTrue) { return(jk_write(encodeState, "true")); break; } else if(object == (id)kCFBooleanFalse) { return(jk_write(encodeState, "false")); break; }
+        if(object == (id)kCFBooleanTrue) { return(jk_encode_write(encodeState, "true")); break; } else if(object == (id)kCFBooleanFalse) { return(jk_encode_write(encodeState, "false")); break; }
 
         long long llv;
         unsigned long long ullv;
@@ -1586,23 +1629,23 @@ static int jk_add_atom_to_buffer(JKEncodeState *encodeState, void *objectPtr) {
         switch(objCType[0]) {
           case 'B':
           case 'c':
-            if(object == (id)kCFBooleanTrue) { return(jk_write(encodeState, "true")); }
-            else if(object == (id)kCFBooleanFalse) { return(jk_write(encodeState, "false")); }
-            else { if(CFNumberGetValue((CFNumberRef)object, kCFNumberLongLongType, &llv))  { return(jk_printf(encodeState, "%lld", llv));  } else { return(1); } }
+            if(object == (id)kCFBooleanTrue) { return(jk_encode_write(encodeState, "true")); }
+            else if(object == (id)kCFBooleanFalse) { return(jk_encode_write(encodeState, "false")); }
+            else { if(CFNumberGetValue((CFNumberRef)object, kCFNumberLongLongType, &llv))  { return(jk_encode_printf(encodeState, "%lld", llv));  } else { jk_encode_error(encodeState, @"Unable to get scalar value from number object."); return(1); } }
             break;
-                    case 'i': case 's': case 'l': case 'q':  if(CFNumberGetValue((CFNumberRef)object, kCFNumberLongLongType, &llv))  { return(jk_printf(encodeState, "%lld", llv));  } else { return(1); } break;
-          case 'C': case 'I': case 'S': case 'L': case 'Q':  if(CFNumberGetValue((CFNumberRef)object, kCFNumberLongLongType, &ullv)) { return(jk_printf(encodeState, "%llu", ullv)); } else { return(1); } break;
+                    case 'i': case 's': case 'l': case 'q':  if(CFNumberGetValue((CFNumberRef)object, kCFNumberLongLongType, &llv))  { return(jk_encode_printf(encodeState, "%lld", llv));  } else { jk_encode_error(encodeState, @"Unable to get scalar value from number object."); return(1); } break;
+          case 'C': case 'I': case 'S': case 'L': case 'Q':  if(CFNumberGetValue((CFNumberRef)object, kCFNumberLongLongType, &ullv)) { return(jk_encode_printf(encodeState, "%llu", ullv)); } else { jk_encode_error(encodeState, @"Unable to get scalar value from number object."); return(1); } break;
 
           case 'f': case 'd':
             {
               double dv;
               if(CFNumberGetValue((CFNumberRef)object, kCFNumberDoubleType, &dv)) {
-                if(!isfinite(dv)) { return(1); }
-                return(jk_printf(encodeState, "%.16g", dv));
+                if(!isfinite(dv)) { jk_encode_error(encodeState, @"Floating point values must be finite.  JSON does not support NaN or Infinity."); return(1); }
+                return(jk_encode_printf(encodeState, "%.16g", dv));
               }
             }
             break;
-          default: jk_printf(encodeState, "/* NSNumber conversion error.  Type: '%c' / 0x%2.2x */", objCType[0], objCType[0]); return(1); break;
+          default: jk_encode_error(encodeState, @"NSNumber conversion error, unknown type.  Type: '%c' / 0x%2.2x", objCType[0], objCType[0]); return(1); break;
         }
       }
       break;
@@ -1611,47 +1654,67 @@ static int jk_add_atom_to_buffer(JKEncodeState *encodeState, void *objectPtr) {
       {
         int printComma = 0;
         CFIndex arrayCount = CFArrayGetCount((CFArrayRef)object), idx = 0L;
-        if(jk_write(encodeState, "[")) { return(1); }
-        if(arrayCount > 256L) {
-          for(id arrayObject in object) { if(printComma) { if(jk_write(encodeState, ",")) { return(1); } } printComma = 1; if(jk_add_atom_to_buffer(encodeState, arrayObject)) { return(1); } }
+        if(jk_encode_write(encodeState, "[")) { return(1); }
+        if(arrayCount > 1024L) {
+          for(id arrayObject in object) { if(printComma) { if(jk_encode_write(encodeState, ",")) { return(1); } } printComma = 1; if(jk_encode_add_atom_to_buffer(encodeState, arrayObject)) { return(1); } }
         } else {
-          void *objects[256];
+          void *objects[1024];
           CFArrayGetValues((CFArrayRef)object, CFRangeMake(0L, arrayCount), (const void **)objects);
-          for(idx = 0L; idx < arrayCount; idx++) { if(printComma) { if(jk_write(encodeState, ",")) { return(1); } } printComma = 1; if(jk_add_atom_to_buffer(encodeState, objects[idx])) { return(1); } }
+          for(idx = 0L; idx < arrayCount; idx++) { if(printComma) { if(jk_encode_write(encodeState, ",")) { return(1); } } printComma = 1; if(jk_encode_add_atom_to_buffer(encodeState, objects[idx])) { return(1); } }
         }
-        if(jk_write(encodeState, "]")) { return(1); }
+        if(jk_encode_write(encodeState, "]")) { return(1); }
       }
       break;
+
     case JKClassDictionary:
       {
         int printComma = 0;
         CFIndex dictionaryCount = CFDictionaryGetCount((CFDictionaryRef)object), idx = 0L;
 
-        if(jk_write(encodeState, "{")) { return(1); }
-        if(dictionaryCount > 256L) {
-          for(id keyObject in object) { if(printComma) { if(jk_write(encodeState, ",")) { return(1); } } printComma = 1; if(jk_add_atom_to_buffer(encodeState, keyObject)) { return(1); } if(jk_write(encodeState, ":")) { return(1); } if(jk_add_atom_to_buffer(encodeState, [object objectForKey:keyObject])) { return(1); } }
+        if(jk_encode_write(encodeState, "{")) { return(1); }
+        if(dictionaryCount > 1024L) {
+          for(id keyObject in object) {
+            if(printComma) { if(jk_encode_write(encodeState, ",")) { return(1); } }
+            printComma = 1;
+            if(!((keyObject->isa == encodeState->fastClassLookup.stringClass) || [keyObject isKindOfClass:[NSString class]])) { jk_encode_error(encodeState, @"Key must be a string object."); return(1); }
+            if(jk_encode_add_atom_to_buffer(encodeState, keyObject)) { return(1); }
+            if(jk_encode_write(encodeState, ":")) { return(1); }
+            if(jk_encode_add_atom_to_buffer(encodeState, (void *)CFDictionaryGetValue((CFDictionaryRef)object, keyObject))) { return(1); }
+          }
         } else {
-          void *keys[256], *objects[256];
+          void *keys[1024], *objects[1024];
           CFDictionaryGetKeysAndValues((CFDictionaryRef)object, (const void **)keys, (const void **)objects);
-          for(idx = 0L; idx < dictionaryCount; idx++) { if(printComma) { if(jk_write(encodeState, ",")) { return(1); } } printComma = 1; if(jk_add_atom_to_buffer(encodeState, keys[idx])) { return(1); } if(jk_write(encodeState, ":")) { return(1); } if(jk_add_atom_to_buffer(encodeState, objects[idx])) { return(1); } }
+          for(idx = 0L; idx < dictionaryCount; idx++) {
+            if(printComma) { if(jk_encode_write(encodeState, ",")) { return(1); } }
+            printComma = 1;
+            if(!((((id)keys[idx])->isa == encodeState->fastClassLookup.stringClass) || [(id)keys[idx] isKindOfClass:[NSString class]])) { jk_encode_error(encodeState, @"Key must be a string object."); return(1); }
+            if(jk_encode_add_atom_to_buffer(encodeState, keys[idx])) { return(1); }
+            if(jk_encode_write(encodeState, ":")) { return(1); }
+            if(jk_encode_add_atom_to_buffer(encodeState, objects[idx])) { return(1); }
+          }
         }
-        if(jk_write(encodeState, "}")) { return(1); }
+        if(jk_encode_write(encodeState, "}")) { return(1); }
       }
       break;
 
-    case JKClassNull: if(jk_write(encodeState, "null")) { return(1); } break;
+    case JKClassNull: if(jk_encode_write(encodeState, "null")) { return(1); } break;
 
-    default: jk_printf(encodeState, "/* Unable to convert class type of '%s' */", [[object className] UTF8String]); return(1); break;
+    default: jk_encode_error(encodeState, @"Unable to serialize object class %@.", [object className]); return(1); break;
   }
-
 
   return(0);
 }
 
 
-static NSData *jk_encode(void *object) {
+static NSData *jk_encode(void *object, JKSerializeOptionFlags optionFlags, NSError **error) {
+  NSCParameterAssert(object != NULL);
+
+  if((error != NULL) && (*error != NULL)) { *error = NULL; }
+
   JKEncodeState encodeState;
   memset(&encodeState, 0, sizeof(JKEncodeState));
+
+  encodeState.serializeOptionFlags = optionFlags;
 
   encodeState.stringBuffer.roundSizeUpToMultipleOf         = (1024UL * 32UL);
   encodeState.utf8ConversionBuffer.roundSizeUpToMultipleOf = 4096UL;
@@ -1663,7 +1726,12 @@ static NSData *jk_encode(void *object) {
   jk_managedBuffer_setToStackBuffer(&encodeState.utf8ConversionBuffer, stackUTF8Buffer, sizeof(stackUTF8Buffer));
 
   NSData *jsonData = NULL;
-  if(jk_add_atom_to_buffer(&encodeState, object) == 0) { jsonData = [NSData dataWithBytes:encodeState.stringBuffer.bytes.ptr length:encodeState.atIndex]; }
+  if(jk_encode_add_atom_to_buffer(&encodeState, object) == 0) {
+    if((jsonData = (NSData *)CFDataCreate(NULL, encodeState.stringBuffer.bytes.ptr, encodeState.atIndex)) == NULL) { jk_encode_error(&encodeState, @"Unable to create NSData object"); }
+    jsonData = [jsonData autorelease];
+  }
+
+  if((error != NULL) && (encodeState.error != NULL)) { *error = encodeState.error; }
 
   jk_managedBuffer_release(&encodeState.stringBuffer);
   jk_managedBuffer_release(&encodeState.utf8ConversionBuffer);
@@ -1674,14 +1742,27 @@ static NSData *jk_encode(void *object) {
 
 @implementation NSArray (JSONKit)
 
+
+
 - (NSData *)JSONData
 {
-  return(jk_encode(self));
+  return([self JSONDataWithOptions:JKSerializeOptionNone error:NULL]);
 }
+
+- (NSData *)JSONDataWithOptions:(JKSerializeOptionFlags)serializeOptions error:(NSError **)error
+{
+  return(jk_encode(self, serializeOptions, error));
+}
+
 
 - (NSString *)JSONString
 {
-  return([[[NSString alloc] initWithData:[self JSONData] encoding:NSUTF8StringEncoding] autorelease]);
+  return([self JSONStringWithOptions:JKSerializeOptionNone error:NULL]);
+}
+
+- (NSString *)JSONStringWithOptions:(JKSerializeOptionFlags)serializeOptions error:(NSError **)error
+{
+  return([[[NSString alloc] initWithData:[self JSONDataWithOptions:serializeOptions error:error] encoding:NSUTF8StringEncoding] autorelease]);
 }
 
 @end
@@ -1691,12 +1772,23 @@ static NSData *jk_encode(void *object) {
 
 - (NSData *)JSONData
 {
-  return(jk_encode(self));
+  return([self JSONDataWithOptions:JKSerializeOptionNone error:NULL]);
+}
+
+- (NSData *)JSONDataWithOptions:(JKSerializeOptionFlags)serializeOptions error:(NSError **)error
+{
+  return(jk_encode(self, serializeOptions, error));
 }
 
 - (NSString *)JSONString
 {
-  return([[[NSString alloc] initWithData:[self JSONData] encoding:NSUTF8StringEncoding] autorelease]);
+  return([self JSONStringWithOptions:JKSerializeOptionNone error:NULL]);
 }
+
+- (NSString *)JSONStringWithOptions:(JKSerializeOptionFlags)serializeOptions error:(NSError **)error
+{
+  return([[[NSString alloc] initWithData:[self JSONDataWithOptions:serializeOptions error:error] encoding:NSUTF8StringEncoding] autorelease]);
+}
+
 
 @end
