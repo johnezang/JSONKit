@@ -187,7 +187,7 @@ typedef struct {
 
 enum {
   JKSerializeOptionNone           = 0,
-  JKSerializeOptionPretty         = (1 << 0),
+  JKSerializeOptionPretty         = (1 << 0), // Not implemented yet...
   JKSerializeOptionEscapeUnicode  = (1 << 1),
   JKSerializeOptionValidFlags     = (JKSerializeOptionPretty | JKSerializeOptionEscapeUnicode),
 };
@@ -204,15 +204,25 @@ typedef JKFlags JKSerializeOptionFlags;
 + (id)decoder;
 + (id)decoderWithParseOptions:(JKParseOptionFlags)parseOptionFlags;
 - (id)initWithParseOptions:(JKParseOptionFlags)parseOptionFlags;
+- (void)clearCache;
 - (id)parseUTF8String:(const unsigned char *)string length:(size_t)length;
 - (id)parseUTF8String:(const unsigned char *)string length:(size_t)length error:(NSError **)error;
-- (void)clearCache;
+// The NSData needs to be UTF8 encoded JSON.
+- (id)parseJSONData:(NSData *)jsonData;
+- (id)parseJSONData:(NSData *)jsonData error:(NSError **)error;
 @end
 
 @interface NSString (JSONKit)
 - (id)objectFromJSONString;
 - (id)objectFromJSONStringWithParseOptions:(JKParseOptionFlags)parseOptionFlags;
 - (id)objectFromJSONStringWithParseOptions:(JKParseOptionFlags)parseOptionFlags error:(NSError **)error;
+@end
+
+@interface NSData (JSONKit)
+// The NSData needs to be UTF8 encoded JSON.
+- (id)objectFromJSONData;
+- (id)objectFromJSONDataWithParseOptions:(JKParseOptionFlags)parseOptionFlags;
+- (id)objectFromJSONDataWithParseOptions:(JKParseOptionFlags)parseOptionFlags error:(NSError **)error;
 @end
 
 @interface NSArray (JSONKit)
