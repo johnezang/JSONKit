@@ -323,7 +323,7 @@ static void jk_managedBuffer_release(JKManagedBuffer *managedBuffer);
 static void jk_managedBuffer_setToStackBuffer(JKManagedBuffer *managedBuffer, unsigned char *ptr, size_t length);
 static unsigned char *jk_managedBuffer_resize(JKManagedBuffer *managedBuffer, size_t newSize);
 static void jk_objectStack_release(JKObjectStack *objectStack);
-static void jk_objectStack_setToStackBuffer(JKObjectStack *objectStack, void **objects, void **keys, size_t count);
+static void jk_objectStack_setToStackBuffer(JKObjectStack *objectStack, void **objects, void **keys, JKHash *hashes, size_t *sizes, size_t count);
 static int  jk_objectStack_resize(JKObjectStack *objectStack, size_t newCount);
 
 static void   jk_error(JKParseState *parseState, NSString *format, ...);
@@ -334,6 +334,7 @@ JK_STATIC_INLINE void jk_parse_skip_whitespace(JKParseState *parseState);
 static int    jk_parse_next_token(JKParseState *parseState);
 static void   jk_set_parsed_token(JKParseState *parseState, const unsigned char *ptr, size_t length, JKTokenType type, size_t advanceBy);
 static void   jk_error_parse_accept_or3(JKParseState *parseState, int state, NSString *or1String, NSString *or2String, NSString *or3String);
+static void  *jk_create_dictionary(JKParseState *parseState, size_t startingObjectIndex);
 static void  *jk_parse_dictionary(JKParseState *parseState);
 static void  *jk_parse_array(JKParseState *parseState);
 static void  *jk_object_for_token(JKParseState *parseState);
@@ -472,11 +473,13 @@ static void jk_objectStack_release(JKObjectStack *objectStack) {
   objectStack->flags   &= ~JKObjectStackLocationMask;
 }
 
-static void jk_objectStack_setToStackBuffer(JKObjectStack *objectStack, void **objects, void **keys, size_t count) {
-  NSCParameterAssert((objectStack != NULL) && (objects != NULL) && (keys != NULL) && (count > 0UL));
+static void jk_objectStack_setToStackBuffer(JKObjectStack *objectStack, void **objects, void **keys, JKHash *hashes, size_t *sizes, size_t count) {
+  NSCParameterAssert((objectStack != NULL) && (objects != NULL) && (keys != NULL) && (hashes != NULL) && (sizes != NULL) && (count > 0UL));
   jk_objectStack_release(objectStack);
   objectStack->objects = objects;
   objectStack->keys    = keys;
+  objectStack->hashes  = hashes;
+  objectStack->sizes   = sizes;
   objectStack->count   = count;
   objectStack->flags   = (objectStack->flags & ~JKObjectStackLocationMask) | JKObjectStackOnStack;
 #ifndef NS_BLOCK_ASSERTIONS
@@ -487,28 +490,42 @@ static void jk_objectStack_setToStackBuffer(JKObjectStack *objectStack, void **o
 
 static int jk_objectStack_resize(JKObjectStack *objectStack, size_t newCount) {
   size_t roundedUpNewCount = newCount;
+  int    returnCode = 0;
+
+  void **newObjects = NULL, **newKeys = NULL;
+  JKHash *newHashes = NULL;
+  size_t *newSizes  = NULL;
 
   if(objectStack->roundSizeUpToMultipleOf > 0UL) { roundedUpNewCount = newCount + ((objectStack->roundSizeUpToMultipleOf - (newCount % objectStack->roundSizeUpToMultipleOf)) % objectStack->roundSizeUpToMultipleOf); }
 
   if((roundedUpNewCount != objectStack->count) && (roundedUpNewCount > objectStack->count)) {
     if((objectStack->flags & JKObjectStackLocationMask) == JKObjectStackOnStack) {
       NSCParameterAssert((objectStack->flags & JKObjectStackMustFree) == 0);
-      void **newObjects = NULL, **newKeys = NULL;
-      
-      if((newObjects = (void **)calloc(1, roundedUpNewCount * sizeof(void *))) == NULL) { return(1); }
+
+      if((newObjects = (void **)calloc(1, roundedUpNewCount * sizeof(void *))) == NULL) { returnCode = 1; goto errorExit; }
       memcpy(newObjects, objectStack->objects, jk_min(objectStack->count, roundedUpNewCount) * sizeof(void *));
-      if((newKeys    = (void **)calloc(1, roundedUpNewCount * sizeof(void *))) == NULL) { free(newObjects); return(1); }
+      if((newKeys    = (void **)calloc(1, roundedUpNewCount * sizeof(void *))) == NULL) { returnCode = 1; goto errorExit; }
       memcpy(newKeys,    objectStack->keys,    jk_min(objectStack->count, roundedUpNewCount) * sizeof(void *));
 
+      if((newHashes  = (JKHash *)calloc(1, roundedUpNewCount * sizeof(JKHash))) == NULL) { returnCode = 1; goto errorExit; }
+      memcpy(newHashes,  objectStack->hashes,  jk_min(objectStack->count, roundedUpNewCount) * sizeof(JKHash));
+      if((newSizes   = (size_t *)calloc(1, roundedUpNewCount * sizeof(size_t))) == NULL) { returnCode = 1; goto errorExit; }
+      memcpy(newSizes,   objectStack->sizes,   jk_min(objectStack->count, roundedUpNewCount) * sizeof(size_t));
+
       objectStack->flags   = (objectStack->flags & ~JKObjectStackLocationMask) | (JKObjectStackOnHeap | JKObjectStackMustFree);
-      objectStack->objects = newObjects;
-      objectStack->keys    = newKeys;
+      objectStack->objects = newObjects; newObjects = NULL;
+      objectStack->keys    = newKeys;    newKeys    = NULL;
+      objectStack->hashes  = newHashes;  newHashes  = NULL;
+      objectStack->sizes   = newSizes;   newSizes   = NULL;
       objectStack->count   = roundedUpNewCount;
     } else {
       NSCParameterAssert(((objectStack->flags & JKObjectStackMustFree) != 0) && ((objectStack->flags & JKObjectStackLocationMask) == JKObjectStackOnHeap));
-      void **newObjects = NULL, **newKeys = NULL;
-      if((newObjects = (void **)realloc(objectStack->objects, roundedUpNewCount * sizeof(void *))) != NULL) { objectStack->objects = newObjects; } else { return(1); }
-      if((newKeys    = (void **)realloc(objectStack->keys,    roundedUpNewCount * sizeof(void *))) != NULL) { objectStack->keys    = newKeys;    } else { return(1); }
+      if((newObjects = (void  **)realloc(objectStack->objects, roundedUpNewCount * sizeof(void *))) != NULL) { objectStack->objects = newObjects; newObjects = NULL; } else { returnCode = 1; goto errorExit; }
+      if((newKeys    = (void  **)realloc(objectStack->keys,    roundedUpNewCount * sizeof(void *))) != NULL) { objectStack->keys    = newKeys;    newKeys    = NULL; } else { returnCode = 1; goto errorExit; }
+
+      if((newHashes  = (JKHash *)realloc(objectStack->hashes,  roundedUpNewCount * sizeof(JKHash))) != NULL) { objectStack->hashes  = newHashes;  newHashes  = NULL; } else { returnCode = 1; goto errorExit; }
+      if((newSizes   = (size_t *)realloc(objectStack->sizes,   roundedUpNewCount * sizeof(size_t))) != NULL) { objectStack->sizes   = newSizes;   newSizes   = NULL; } else { returnCode = 1; goto errorExit; }
+
 #ifndef NS_BLOCK_ASSERTIONS
       size_t idx;
       for(idx = objectStack->count; idx < roundedUpNewCount; idx++) { objectStack->objects[idx] = NULL; objectStack->keys[idx] = NULL; }
@@ -517,7 +534,13 @@ static int jk_objectStack_resize(JKObjectStack *objectStack, size_t newCount) {
     }
   }
 
-  return(0);
+ errorExit:
+  if(newObjects != NULL) { free(newObjects); newObjects = NULL; }
+  if(newKeys    != NULL) { free(newKeys);    newKeys    = NULL; }
+  if(newHashes  != NULL) { free(newHashes);  newHashes  = NULL; }
+  if(newSizes   != NULL) { free(newSizes);   newSizes   = NULL; }
+
+  return(returnCode);
 }
 
 
@@ -896,6 +919,9 @@ static int jk_parse_number(JKParseState *parseState) {
     numberTempBuf[parseState->token.tokenPtrRange.length] = 0;
 
     errno = 0;
+    
+    // Treat "-0" as a floating point number, which is capable of representing negative zeros.
+    if(isNegative && (parseState->token.tokenPtrRange.length == 2) && (numberTempBuf[1] == '0')) { isFloatingPoint = 1; }
 
     if(isFloatingPoint) {
       parseState->token.value.number.doubleValue = strtod((const char *)numberTempBuf, (char **)&endOfNumber);
@@ -1070,7 +1096,10 @@ static void *jk_cachedObjects(JKParseState *parseState) {
   switch(parseState->token.value.type) {
     case JKValueTypeString:           parsedAtom = (void *)CFStringCreateWithBytes(NULL, parseState->token.value.ptrRange.ptr, parseState->token.value.ptrRange.length, kCFStringEncodingUTF8, 0); break;
     case JKValueTypeLongLong:         parsedAtom = (void *)CFNumberCreate(NULL, kCFNumberLongLongType, &parseState->token.value.number.longLongValue);                                             break;
-    case JKValueTypeUnsignedLongLong: parsedAtom = (void *)CFNumberCreate(NULL, kCFNumberLongLongType, &parseState->token.value.number.unsignedLongLongValue);                                     break;
+    case JKValueTypeUnsignedLongLong:
+      if(parseState->token.value.number.unsignedLongLongValue <= LLONG_MAX) { parsedAtom = (void *)CFNumberCreate(NULL, kCFNumberLongLongType, &parseState->token.value.number.unsignedLongLongValue); }
+      else { parsedAtom = (void *)parseState->objCImpCache.NSNumberInitWithUnsignedLongLong(parseState->objCImpCache.NSNumberAlloc(parseState->objCImpCache.NSNumberClass, @selector(alloc)), @selector(initWithUnsignedLongLong:), parseState->token.value.number.unsignedLongLongValue); }
+      break;
     case JKValueTypeDouble:           parsedAtom = (void *)CFNumberCreate(NULL, kCFNumberDoubleType,   &parseState->token.value.number.doubleValue);                                               break;
     default: jk_error(parseState, @"Internal error: Unknown token value type. line #%ld", (long)__LINE__); break;
   }
@@ -1162,6 +1191,38 @@ static void *jk_parse_array(JKParseState *parseState) {
   return(parsedArray);
 }
 
+static void * jk_create_dictionary(JKParseState *parseState, size_t startingObjectIndex) {
+  void *parsedDictionary = NULL;
+
+  parseState->objectStack.index--;
+
+  ssize_t numberOfDuplicateKeys = 0L, atIndex = 0L, cmpIndex = 0L;
+  for(atIndex = parseState->objectStack.index; atIndex >= (ssize_t)startingObjectIndex; atIndex--) {
+    for(cmpIndex = atIndex - 1L; cmpIndex >= (ssize_t)startingObjectIndex; cmpIndex--) {
+      if((parseState->objectStack.keys[atIndex] != NULL) && (parseState->objectStack.keys[cmpIndex] != NULL) && (parseState->objectStack.hashes[atIndex] == parseState->objectStack.hashes[cmpIndex]) && (parseState->objectStack.sizes[atIndex] == parseState->objectStack.sizes[cmpIndex]) && ((parseState->objectStack.keys[atIndex] == parseState->objectStack.keys[cmpIndex]) || CFEqual(parseState->objectStack.keys[atIndex], parseState->objectStack.keys[cmpIndex]))) {
+        numberOfDuplicateKeys++;
+        CFRelease(parseState->objectStack.keys[cmpIndex]);    parseState->objectStack.keys[cmpIndex]    = NULL;
+        CFRelease(parseState->objectStack.objects[cmpIndex]); parseState->objectStack.objects[cmpIndex] = NULL;
+      }
+    }
+  }
+
+  if(numberOfDuplicateKeys) {
+    atIndex = startingObjectIndex;
+    for(cmpIndex = startingObjectIndex; cmpIndex < (ssize_t)parseState->objectStack.index; cmpIndex++) {
+      if((parseState->objectStack.keys[cmpIndex] != NULL) && (cmpIndex != atIndex)) {
+        parseState->objectStack.keys[atIndex]    = parseState->objectStack.keys[cmpIndex];
+        parseState->objectStack.objects[atIndex] = parseState->objectStack.objects[cmpIndex];
+      }
+    }
+
+    parseState->objectStack.index -= numberOfDuplicateKeys;
+  }
+
+  parsedDictionary = (void *)CFDictionaryCreate(NULL, (const void **)&parseState->objectStack.keys[startingObjectIndex], (const void **)&parseState->objectStack.objects[startingObjectIndex], (parseState->objectStack.index) - startingObjectIndex, &jk_transferOwnershipDictionaryKeyCallBacks, &jk_transferOwnershipDictionaryValueCallBacks);
+
+  return(parsedDictionary);
+}
 
 static void *jk_parse_dictionary(JKParseState *parseState) {
   size_t  startingObjectIndex = parseState->objectStack.index;
@@ -1180,10 +1241,10 @@ static void *jk_parse_dictionary(JKParseState *parseState) {
       switch(parseState->token.type) {
         case JKTokenTypeString:
           if(JK_EXPECTED((dictState & JKParseAcceptValue)        == 0,    0U)) { parseState->errorIsPrev = 1; jk_error(parseState, @"Unexpected string.");           stopParsing = 1; break; }
-          if(JK_EXPECTED((key = jk_object_for_token(parseState)) == NULL, 0U)) {                              jk_error(parseState, @"Internal error: Key == NULL."); stopParsing = 1; break; } else { parseState->objectStack.keys[objectStackIndex] = key; }
+          if(JK_EXPECTED((key = jk_object_for_token(parseState)) == NULL, 0U)) {                              jk_error(parseState, @"Internal error: Key == NULL."); stopParsing = 1; break; } else { parseState->objectStack.keys[objectStackIndex] = key; parseState->objectStack.hashes[objectStackIndex] = parseState->token.value.hash; parseState->objectStack.sizes[objectStackIndex] = parseState->token.value.ptrRange.length;}
           break;
 
-        case JKTokenTypeObjectEnd: if((JK_EXPECTED(dictState & JKParseAcceptEnd,   1U))) { NSCParameterAssert(parseState->objectStack.index >= startingObjectIndex); parsedDictionary = (void *)CFDictionaryCreate(NULL, (const void **)&parseState->objectStack.keys[startingObjectIndex], (const void **)&parseState->objectStack.objects[startingObjectIndex], (--parseState->objectStack.index) - startingObjectIndex, &jk_transferOwnershipDictionaryKeyCallBacks, &jk_transferOwnershipDictionaryValueCallBacks); } else { parseState->errorIsPrev = 1; jk_error(parseState, @"Unexpected '}'."); } stopParsing = 1; break;
+        case JKTokenTypeObjectEnd: if((JK_EXPECTED(dictState & JKParseAcceptEnd,   1U))) { NSCParameterAssert(parseState->objectStack.index >= startingObjectIndex); parsedDictionary = jk_create_dictionary(parseState, startingObjectIndex); } else { parseState->errorIsPrev = 1; jk_error(parseState, @"Unexpected '}'."); } stopParsing = 1; break;
         case JKTokenTypeComma:     if((JK_EXPECTED(dictState & JKParseAcceptComma, 1U))) { dictState = JKParseAcceptValue; parseState->objectStack.index--; continue; } else { parseState->errorIsPrev = 1; jk_error(parseState, @"Unexpected ','."); stopParsing = 1; } break;
 
         default: parseState->errorIsPrev = 1; jk_error_parse_accept_or3(parseState, dictState, @"a \"STRING\"", @"a comma", @"a '}'"); stopParsing = 1; break;
@@ -1277,6 +1338,15 @@ static id json_parse_it(JKParseState *parseState) {
   parseState.token.tokenBuffer.roundSizeUpToMultipleOf = 4096UL;
   parseState.objectStack.roundSizeUpToMultipleOf       = 2048UL;
 
+  parseState.objCImpCache.NSNumberClass = [NSNumber class];
+  parseState.objCImpCache.NSNumberAlloc = (NSNumberAllocImp)[NSNumber methodForSelector:@selector(alloc)];
+
+  // Hacktacular.  Need to do it this way due to the nature of class clusters.
+  id temp_NSNumber = [NSNumber alloc];
+  parseState.objCImpCache.NSNumberInitWithUnsignedLongLong = (NSNumberInitWithUnsignedLongLongImp)[temp_NSNumber methodForSelector:@selector(initWithUnsignedLongLong:)];
+  [[temp_NSNumber init] release];
+  temp_NSNumber = NULL;
+
   parseState.cache.count = JK_CACHE_SLOTS;
   if((parseState.cache.items = (JKTokenCacheItem *)calloc(1, sizeof(JKTokenCacheItem) * parseState.cache.count)) == NULL) { goto errorExit; }
 
@@ -1337,10 +1407,11 @@ static id json_parse_it(JKParseState *parseState) {
   unsigned char stackTokenBuffer[JK_TOKENBUFFER_SIZE] JK_ALIGNED(64);
   jk_managedBuffer_setToStackBuffer(&parseState.token.tokenBuffer, stackTokenBuffer, sizeof(stackTokenBuffer));
 
-  void *stackObjects[JK_STACK_OBJS] JK_ALIGNED(64);
-  void *stackKeys   [JK_STACK_OBJS] JK_ALIGNED(64);
-
-  jk_objectStack_setToStackBuffer(&parseState.objectStack, stackObjects, stackKeys, JK_STACK_OBJS);
+  void   *stackObjects[JK_STACK_OBJS] JK_ALIGNED(64);
+  void   *stackKeys   [JK_STACK_OBJS] JK_ALIGNED(64);
+  JKHash  stackHashes [JK_STACK_OBJS] JK_ALIGNED(64);
+  size_t  stackSizes  [JK_STACK_OBJS] JK_ALIGNED(64);
+  jk_objectStack_setToStackBuffer(&parseState.objectStack, stackObjects, stackKeys, stackHashes, stackSizes, JK_STACK_OBJS);
 
   id parsedJSON = json_parse_it(&parseState);
 

@@ -106,7 +106,9 @@ typedef struct {
 
 typedef struct {
   void               **objects, **keys;
-  size_t               count,     index, roundSizeUpToMultipleOf;
+  JKHash              *hashes;
+  size_t              *sizes;
+  size_t               count, index, roundSizeUpToMultipleOf;
   JKObjectStackFlags   flags;
 } JKObjectStack;
 
@@ -172,6 +174,15 @@ enum {
 };
 typedef JKFlags JKParseOptionFlags;
 
+typedef id (*NSNumberAllocImp)(id object, SEL selector);
+typedef id (*NSNumberInitWithUnsignedLongLongImp)(id object, SEL selector, unsigned long long value);
+
+typedef struct {
+  Class NSNumberClass;
+  NSNumberAllocImp NSNumberAlloc;
+  NSNumberInitWithUnsignedLongLongImp NSNumberInitWithUnsignedLongLong;
+} JKObjCImpCache;
+
 typedef struct {
   JKParseOptionFlags  parseOptionFlags;
   JKConstBuffer       stringBuffer;
@@ -181,6 +192,7 @@ typedef struct {
   JKParseToken        token;
   JKObjectStack       objectStack;
   JKTokenCache        cache;
+  JKObjCImpCache      objCImpCache;
   NSError            *error;
 } JKParseState;
 
