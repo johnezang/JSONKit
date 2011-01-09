@@ -5,7 +5,7 @@
 //
 
 /*
- Copyright (c) 2010, John Engelhart
+ Copyright (c) 2011, John Engelhart
  
  All rights reserved.
  
@@ -77,6 +77,9 @@ typedef unsigned int   NSUInteger;
 
 #ifndef _JSONKIT_H_
 #define _JSONKIT_H_
+
+#define JSONKIT_VERSION_MAJOR 1
+#define JSONKIT_VERSION_MINOR 2
 
 typedef NSUInteger JKHash;
 typedef NSUInteger JKFlags;
