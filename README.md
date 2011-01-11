@@ -95,8 +95,8 @@ JSONKit uses Core Foundation internally, and it is assumed that Core Foundation 
 **Note:** The bytes contained in a [`NSData`][NSData] object ***must*** be `UTF8` encoded.
 
 **Important:** Methods will raise [`NSInvalidArgumentException`][NSInvalidArgumentException] if `parseOptionFlags` is not valid.  
-**Important:** `parseUTF8String:` will raise [`NSInvalidArgumentException`][NSInvalidArgumentException] if `parseUTF8String` is NULL.  
-**Important:** `parseJSONData:` will raise [`NSInvalidArgumentException`][NSInvalidArgumentException] if `jsonData` is NULL.
+**Important:** `parseUTF8String:` will raise [`NSInvalidArgumentException`][NSInvalidArgumentException] if `parseUTF8String` is `NULL`.  
+**Important:** `parseJSONData:` will raise [`NSInvalidArgumentException`][NSInvalidArgumentException] if `jsonData` is `NULL`.
 
 <pre>+ (id)decoder;
 + (id)decoderWithParseOptions:(JKParseOptionFlags)parseOptionFlags;
