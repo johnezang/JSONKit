@@ -105,7 +105,7 @@
 #import <Foundation/NSObjCRuntime.h>
 
 // For DJB hash.
-#define JK_HASH_INIT           (5381UL)
+#define JK_HASH_INIT           (1402737925UL)
 
 // Use __builtin_clz() instead of trailingBytesForUTF8[] table lookup.
 #define JK_FAST_TRAILING_BYTES
@@ -360,14 +360,6 @@ JK_STATIC_INLINE size_t jk_min(size_t a, size_t b) { return((a < b) ? a : b); }
 JK_STATIC_INLINE size_t jk_max(size_t a, size_t b) { return((a > b) ? a : b); }
 
 JK_STATIC_INLINE JKHash calculateHash(JKHash currentHash, unsigned char c) { return(((currentHash << 5) + currentHash) + c); }
-JK_STATIC_INLINE JKHash calculateNumberHash(JKHash currentHash, unsigned char c) {
-  uint64_t newHash = (currentHash ^ (0xa5a5a5c5ULL * calculateHash(currentHash, c)));
-  newHash ^= newHash >> 29;
-  newHash += newHash << 16;
-  newHash ^= newHash >> 21;
-  newHash += newHash << 32;
-  return((JKHash)newHash);
-}
 
 static void jk_error(JKParseState *parseState, NSString *format, ...) {
   NSCParameterAssert((parseState != NULL) && (format != NULL));
@@ -966,7 +958,7 @@ static int jk_parse_number(JKParseState *parseState) {
     if(JK_EXPECTED(endOfNumber != &numberTempBuf[parseState->token.tokenPtrRange.length], 0U) && JK_EXPECTED(numberState != JSONNumberStateError, 0U)) { numberState = JSONNumberStateError; jk_error(parseState, @"The conversion function did not consume all of the number tokens characters."); }
 
     size_t hashIndex = 0UL;
-    for(hashIndex = 0UL; hashIndex < parseState->token.value.ptrRange.length; hashIndex++) { parseState->token.value.hash = calculateNumberHash(parseState->token.value.hash, parseState->token.value.ptrRange.ptr[hashIndex]); }
+    for(hashIndex = 0UL; hashIndex < parseState->token.value.ptrRange.length; hashIndex++) { parseState->token.value.hash = calculateHash(parseState->token.value.hash, parseState->token.value.ptrRange.ptr[hashIndex]); }
   }
 
   if(JK_EXPECTED(numberState != JSONNumberStateFinished, 0U)) { jk_error(parseState, @"Invalid number."); }
@@ -1222,6 +1214,7 @@ static void *jk_create_dictionary(JKParseState *parseState, size_t startingObjec
       NSCParameterAssert(((parseState->objectStack.keys[cmpIndex] != NULL) || (parseState->objectStack.objects[cmpIndex] != NULL)) ? ((parseState->objectStack.keys[cmpIndex] != NULL) && (parseState->objectStack.objects[cmpIndex] != NULL)) : 1);
       if((parseState->objectStack.keys[cmpIndex] != NULL)) {
         if(cmpIndex != atIndex) {
+          NSCParameterAssert(((parseState->objectStack.keys[atIndex] == NULL) && (parseState->objectStack.objects[atIndex] == NULL)));
           parseState->objectStack.keys[atIndex]     = parseState->objectStack.keys[cmpIndex];
           parseState->objectStack.objects[atIndex]  = parseState->objectStack.objects[cmpIndex];
           parseState->objectStack.keys[cmpIndex]    = NULL;
