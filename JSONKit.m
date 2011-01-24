@@ -353,7 +353,6 @@ static NSData *jk_encode(void *object, JKSerializeOptionFlags optionFlags, NSErr
 JK_STATIC_INLINE size_t jk_min(size_t a, size_t b);
 JK_STATIC_INLINE size_t jk_max(size_t a, size_t b);
 JK_STATIC_INLINE JKHash calculateHash(JKHash currentHash, unsigned char c);
-JK_STATIC_INLINE JKHash calculateNumberHash(JKHash currentHash, unsigned char c);
 
 
 JK_STATIC_INLINE size_t jk_min(size_t a, size_t b) { return((a < b) ? a : b); }
@@ -999,19 +998,19 @@ JK_STATIC_INLINE void jk_parse_skip_whitespace(JKParseState *parseState) {
   const unsigned char *atCharacterPtr   = NULL;
   const unsigned char *endOfStringPtr   = JK_END_STRING_PTR(parseState);
 
-  for(atCharacterPtr = JK_AT_STRING_PTR(parseState); (JK_EXPECTED((atCharacterPtr = JK_AT_STRING_PTR(parseState)) < endOfStringPtr, 1U)); parseState->atIndex++) {
+  for(atCharacterPtr = JK_AT_STRING_PTR(parseState); JK_EXPECTED(atCharacterPtr < endOfStringPtr, 1U); parseState->atIndex++, atCharacterPtr = JK_AT_STRING_PTR(parseState)) {
     if(((*(atCharacterPtr + 0)) == ' ') || ((*(atCharacterPtr + 0)) == '\t')) { continue; }
     if(jk_parse_skip_newline(parseState)) { continue; }
     if(parseState->parseOptionFlags & JKParseOptionComments) {
       if((JK_EXPECTED((*(atCharacterPtr + 0)) == '/', 0U)) && (JK_EXPECTED((atCharacterPtr + 1) < endOfStringPtr, 1U))) {
         if((*(atCharacterPtr + 1)) == '/') {
           parseState->atIndex++;
-          for(atCharacterPtr = JK_AT_STRING_PTR(parseState); (JK_EXPECTED((atCharacterPtr = JK_AT_STRING_PTR(parseState)) < endOfStringPtr, 1U)); parseState->atIndex++) { if(jk_parse_skip_newline(parseState)) { break; } }
+          for(atCharacterPtr = JK_AT_STRING_PTR(parseState); JK_EXPECTED(atCharacterPtr < endOfStringPtr, 1U); parseState->atIndex++, atCharacterPtr = JK_AT_STRING_PTR(parseState)) { if(jk_parse_skip_newline(parseState)) { break; } }
           continue;
         }
         if((*(atCharacterPtr + 1)) == '*') {
           parseState->atIndex++;
-          for(atCharacterPtr = JK_AT_STRING_PTR(parseState); (JK_EXPECTED((atCharacterPtr = JK_AT_STRING_PTR(parseState)) < endOfStringPtr, 1U)); parseState->atIndex++) {
+          for(atCharacterPtr = JK_AT_STRING_PTR(parseState); JK_EXPECTED(atCharacterPtr < endOfStringPtr, 1U); parseState->atIndex++, atCharacterPtr = JK_AT_STRING_PTR(parseState)) {
             if(jk_parse_skip_newline(parseState)) { continue; }
             if(((*(atCharacterPtr + 0)) == '*') && (((atCharacterPtr + 1) < endOfStringPtr) && ((*(atCharacterPtr + 1)) == '/'))) { parseState->atIndex++; break; }
           }
@@ -1630,8 +1629,8 @@ static int jk_encode_add_atom_to_buffer(JKEncodeState *encodeState, void *object
         
           if(((size_t)maxStringUTF8Length > encodeState->utf8ConversionBuffer.bytes.length) && (jk_managedBuffer_resize(&encodeState->utf8ConversionBuffer, maxStringUTF8Length + 1024UL) == NULL)) { jk_encode_error(encodeState, @"Unable to resize temporary buffer."); return(1); }
         
-          CFIndex usedBytes = 0L, convertedCount = 0L;
-          convertedCount = CFStringGetBytes((CFStringRef)object, CFRangeMake(0L, stringLength), kCFStringEncodingUTF8, '?', NO, encodeState->utf8ConversionBuffer.bytes.ptr, encodeState->utf8ConversionBuffer.bytes.length - 16L, &usedBytes);
+          CFIndex usedBytes = 0L;
+          CFStringGetBytes((CFStringRef)object, CFRangeMake(0L, stringLength), kCFStringEncodingUTF8, '?', NO, encodeState->utf8ConversionBuffer.bytes.ptr, encodeState->utf8ConversionBuffer.bytes.length - 16L, &usedBytes);
           encodeState->utf8ConversionBuffer.bytes.ptr[usedBytes] = 0;
         
           if(((encodeState->atIndex + maxStringUTF8Length) > encodeState->stringBuffer.bytes.length) && (jk_managedBuffer_resize(&encodeState->stringBuffer, encodeState->atIndex + maxStringUTF8Length + 1024UL) == NULL)) { jk_encode_error(encodeState, @"Unable to resize temporary buffer."); return(1); }
