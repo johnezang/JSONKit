@@ -79,7 +79,7 @@ typedef unsigned int   NSUInteger;
 #define _JSONKIT_H_
 
 #define JSONKIT_VERSION_MAJOR 1
-#define JSONKIT_VERSION_MINOR 2
+#define JSONKIT_VERSION_MINOR 3
 
 typedef NSUInteger JKHash;
 typedef NSUInteger JKFlags;
@@ -222,7 +222,7 @@ typedef JKFlags JKSerializeOptionFlags;
 - (void)clearCache;
 - (id)parseUTF8String:(const unsigned char *)string length:(size_t)length;
 - (id)parseUTF8String:(const unsigned char *)string length:(size_t)length error:(NSError **)error;
-// The NSData needs to be UTF8 encoded JSON.
+// The NSData MUST be UTF8 encoded JSON.
 - (id)parseJSONData:(NSData *)jsonData;
 - (id)parseJSONData:(NSData *)jsonData error:(NSError **)error;
 @end
@@ -234,7 +234,7 @@ typedef JKFlags JKSerializeOptionFlags;
 @end
 
 @interface NSData (JSONKit)
-// The NSData needs to be UTF8 encoded JSON.
+// The NSData MUST be UTF8 encoded JSON.
 - (id)objectFromJSONData;
 - (id)objectFromJSONDataWithParseOptions:(JKParseOptionFlags)parseOptionFlags;
 - (id)objectFromJSONDataWithParseOptions:(JKParseOptionFlags)parseOptionFlags error:(NSError **)error;
