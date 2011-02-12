@@ -899,26 +899,29 @@ static int jk_parse_number(JKParseState *parseState) {
   const unsigned char *numberStart       = JK_AT_STRING_PTR(parseState);
   const unsigned char *endOfBuffer       = JK_END_STRING_PTR(parseState);
   const unsigned char *atNumberCharacter = NULL;
-  int                  numberState       = JSONNumberStateWholeNumberStart, isFloatingPoint = 0, isNegative = 0, backup = 0;
+  int                  numberState       = JSONNumberStateWholeNumberStart, isFloatingPoint = 0, isNegative = 0, isHexFloatingPoint = 0, backup = 0;
   size_t               startingIndex     = parseState->atIndex;
 
   for(atNumberCharacter = numberStart; (JK_EXPECTED(atNumberCharacter < endOfBuffer, 1U)) && (JK_EXPECTED(!((numberState == JSONNumberStateFinished) || (numberState == JSONNumberStateError)), 1U)); atNumberCharacter++) {
     unsigned long currentChar = (unsigned long)(*atNumberCharacter);
 
     switch(numberState) {
-      case JSONNumberStateWholeNumberStart: if   (currentChar == '-')                                                                              { numberState = JSONNumberStateWholeNumberMinus;      isNegative      = 1; break; }
-      case JSONNumberStateWholeNumberMinus: if   (currentChar == '0')                                                                              { numberState = JSONNumberStateWholeNumberZero;                            break; }
-                                       else if(  (currentChar >= '1') && (currentChar <= '9'))                                                     { numberState = JSONNumberStateWholeNumber;                                break; }
-                                       else                                                     { /* XXX Add error message */                        numberState = JSONNumberStateError;                                      break; }
-      case JSONNumberStateExponentStart:    if(  (currentChar == '+') || (currentChar == '-'))                                                     { numberState = JSONNumberStateExponentPlusMinus;                          break; }
+      case JSONNumberStateWholeNumberStart: if   (currentChar == '-')                                                                                       { numberState = JSONNumberStateWholeNumberMinus;      isNegative      = 1; break; }
+      case JSONNumberStateWholeNumberMinus: if   (currentChar == '0')                                                                                       { numberState = JSONNumberStateWholeNumberZero;                            break; }
+                                       else if(  (currentChar >= '1') && (currentChar <= '9'))                                                              { numberState = JSONNumberStateWholeNumber;                                break; }
+                                       else                                                     { /* XXX Add error message */                                 numberState = JSONNumberStateError;                                      break; }
+      case JSONNumberStateExponentStart:    if(  (currentChar == '+') || (currentChar == '-'))                                                              { numberState = JSONNumberStateExponentPlusMinus;                          break; }
       case JSONNumberStateFractionalNumberStart:
-      case JSONNumberStateExponentPlusMinus:if(!((currentChar >= '0') && (currentChar <= '9'))) { /* XXX Add error message */                        numberState = JSONNumberStateError;                                      break; }
-                                       else {                                              if(numberState == JSONNumberStateFractionalNumberStart) { numberState = JSONNumberStateFractionalNumber; }
-                                                                                           else                                                    { numberState = JSONNumberStateExponent;         }                         break; }
-      case JSONNumberStateWholeNumberZero:
-      case JSONNumberStateWholeNumber:      if   (currentChar == '.')                                                                              { numberState = JSONNumberStateFractionalNumberStart; isFloatingPoint = 1; break; }
-      case JSONNumberStateFractionalNumber: if(  (currentChar == 'e') || (currentChar == 'E'))                                                     { numberState = JSONNumberStateExponentStart;         isFloatingPoint = 1; break; }
-      case JSONNumberStateExponent:         if(!((currentChar >= '0') && (currentChar <= '9')) || (numberState == JSONNumberStateWholeNumberZero)) { numberState = JSONNumberStateFinished;              backup          = 1; break; }
+      case JSONNumberStateExponentPlusMinus:if(!((currentChar >= '0') && (currentChar <= '9'))) { /* XXX Add error message */                                 numberState = JSONNumberStateError;                                      break; }
+                                       else {                                              if(numberState == JSONNumberStateFractionalNumberStart)          { numberState = JSONNumberStateFractionalNumber; }
+                                                                                           else                                                             { numberState = JSONNumberStateExponent;         }                         break; }
+      case JSONNumberStateWholeNumberZero:  if(((parseState->parseOptionFlags & JKParseOptionExtendedFloatingPoint) != 0) && ((currentChar | 0x20) == 'x')) { numberState = JSONNumberStateWholeNumber;           isFloatingPoint = 1; isHexFloatingPoint = 1; break; }
+      case JSONNumberStateWholeNumber:      if   ( currentChar         == '.')                                                                              { numberState = JSONNumberStateFractionalNumberStart; isFloatingPoint = 1; break; }
+      case JSONNumberStateFractionalNumber: if(  ((currentChar | 0x20) == 'e') ||
+                                                 (isHexFloatingPoint &&  ((currentChar | 0x20) == 'p')))                                                    { numberState = JSONNumberStateExponentStart;         isFloatingPoint = 1; isHexFloatingPoint = 2; break; }
+      case JSONNumberStateExponent:         if(!((                       ( currentChar         >= '0') && ( currentChar         <= '9') )  ||
+                                                 (isHexFloatingPoint && (((currentChar | 0x20) >= 'a') && ((currentChar | 0x20) <= 'f')))) || 
+                                                (numberState == JSONNumberStateWholeNumberZero))                                                            { numberState = JSONNumberStateFinished;              backup          = 1; break; }
         break;
       default:                                                                                    /* XXX Add error message */                        numberState = JSONNumberStateError;                                      break;
     }
@@ -927,6 +930,11 @@ static int jk_parse_number(JKParseState *parseState) {
   parseState->token.tokenPtrRange.ptr    = parseState->stringBuffer.bytes.ptr + startingIndex;
   parseState->token.tokenPtrRange.length = (atNumberCharacter - parseState->token.tokenPtrRange.ptr) - backup;
   parseState->atIndex                    = (parseState->token.tokenPtrRange.ptr + parseState->token.tokenPtrRange.length) - parseState->stringBuffer.bytes.ptr;
+
+  if((numberState == JSONNumberStateFinished) && (isHexFloatingPoint == 1)) {
+    jk_error(parseState, @"The value '%*.*s' is not a valid hexadecimal floating point number.", (int)parseState->token.tokenPtrRange.length, (int)parseState->token.tokenPtrRange.length, parseState->token.tokenPtrRange.ptr);
+    numberState = JSONNumberStateError;
+  }
 
   if(numberState == JSONNumberStateFinished) {
     unsigned char  numberTempBuf[parseState->token.tokenPtrRange.length + 4UL];
@@ -1731,7 +1739,7 @@ static int jk_encode_add_atom_to_buffer(JKEncodeState *encodeState, void *object
               double dv;
               if(CFNumberGetValue((CFNumberRef)object, kCFNumberDoubleType, &dv)) {
                 if(!isfinite(dv)) { jk_encode_error(encodeState, @"Floating point values must be finite.  JSON does not support NaN or Infinity."); return(1); }
-                return(jk_encode_printf(encodeState, "%.16g", dv));
+                return(jk_encode_printf(encodeState, ((encodeState->serializeOptionFlags & JKSerializeOptionExtendedFloatingPoint) == 0) ? ".17g" : "%a", dv));
               }
             }
             break;

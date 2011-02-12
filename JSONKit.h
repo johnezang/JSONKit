@@ -173,7 +173,8 @@ enum {
   JKParseOptionUnicodeNewlines          = (1 << 1),
   JKParseOptionLooseUnicode             = (1 << 2),
   JKParseOptionPermitTextAfterValidJSON = (1 << 3),
-  JKParseOptionValidFlags               = (JKParseOptionComments | JKParseOptionUnicodeNewlines | JKParseOptionLooseUnicode | JKParseOptionPermitTextAfterValidJSON),
+  JKParseOptionExtendedFloatingPoint    = (1 << 4),
+  JKParseOptionValidFlags               = (JKParseOptionComments | JKParseOptionUnicodeNewlines | JKParseOptionLooseUnicode | JKParseOptionPermitTextAfterValidJSON | JKParseOptionExtendedFloatingPoint),
 };
 typedef JKFlags JKParseOptionFlags;
 
@@ -201,10 +202,11 @@ typedef struct {
 
 
 enum {
-  JKSerializeOptionNone           = 0,
-  JKSerializeOptionPretty         = (1 << 0), // Not implemented yet...
-  JKSerializeOptionEscapeUnicode  = (1 << 1),
-  JKSerializeOptionValidFlags     = (JKSerializeOptionPretty | JKSerializeOptionEscapeUnicode),
+  JKSerializeOptionNone                  = 0,
+  JKSerializeOptionPretty                = (1 << 0), // Not implemented yet...
+  JKSerializeOptionEscapeUnicode         = (1 << 1),
+  JKSerializeOptionExtendedFloatingPoint = (1 << 2),
+  JKSerializeOptionValidFlags            = (JKSerializeOptionPretty | JKSerializeOptionEscapeUnicode | JKSerializeOptionExtendedFloatingPoint),
 };
 typedef JKFlags JKSerializeOptionFlags;
 
