@@ -912,13 +912,14 @@ static int jk_parse_number(JKParseState *parseState) {
                                        else                                                     { /* XXX Add error message */                                 numberState = JSONNumberStateError;                                      break; }
       case JSONNumberStateExponentStart:    if(  (currentChar == '+') || (currentChar == '-'))                                                              { numberState = JSONNumberStateExponentPlusMinus;                          break; }
       case JSONNumberStateFractionalNumberStart:
-      case JSONNumberStateExponentPlusMinus:if(!((currentChar >= '0') && (currentChar <= '9'))) { /* XXX Add error message */                                 numberState = JSONNumberStateError;                                      break; }
+      case JSONNumberStateExponentPlusMinus:if(!(((currentChar >= '0') && (currentChar <= '9')) ||
+                                                 (isHexFloatingPoint && (((currentChar | 0x20) >= 'a') && ((currentChar | 0x20) <= 'f')))))                 { numberState = JSONNumberStateError;                                      break; }
                                        else {                                              if(numberState == JSONNumberStateFractionalNumberStart)          { numberState = JSONNumberStateFractionalNumber; }
                                                                                            else                                                             { numberState = JSONNumberStateExponent;         }                         break; }
       case JSONNumberStateWholeNumberZero:  if(((parseState->parseOptionFlags & JKParseOptionExtendedFloatingPoint) != 0) && ((currentChar | 0x20) == 'x')) { numberState = JSONNumberStateWholeNumber;           isFloatingPoint = 1; isHexFloatingPoint = 1; break; }
       case JSONNumberStateWholeNumber:      if   ( currentChar         == '.')                                                                              { numberState = JSONNumberStateFractionalNumberStart; isFloatingPoint = 1; break; }
-      case JSONNumberStateFractionalNumber: if(  ((currentChar | 0x20) == 'e') ||
-                                                 (isHexFloatingPoint &&  ((currentChar | 0x20) == 'p')))                                                    { numberState = JSONNumberStateExponentStart;         isFloatingPoint = 1; isHexFloatingPoint = 2; break; }
+      case JSONNumberStateFractionalNumber: if(  (!isHexFloatingPoint && ((currentChar | 0x20) == 'e')) ||
+                                                 ( isHexFloatingPoint && ((currentChar | 0x20) == 'p')))                                                    { numberState = JSONNumberStateExponentStart;         isFloatingPoint = 1; isHexFloatingPoint = 2; break; }
       case JSONNumberStateExponent:         if(!((                       ( currentChar         >= '0') && ( currentChar         <= '9') )  ||
                                                  (isHexFloatingPoint && (((currentChar | 0x20) >= 'a') && ((currentChar | 0x20) <= 'f')))) || 
                                                 (numberState == JSONNumberStateWholeNumberZero))                                                            { numberState = JSONNumberStateFinished;              backup          = 1; break; }
