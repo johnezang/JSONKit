@@ -742,35 +742,35 @@ static int jk_parse_string(JKParseState *parseState) {
     unsigned long currentChar = (*atStringCharacter), escapedChar;
 
     if(JK_EXPECTED(stringState == JSONStringStateParsing, 1U)) {
-      if(JK_EXPECTED(currentChar < (unsigned long)0x80, 1U)) {
-        if(JK_EXPECTED(currentChar == (unsigned long)'"',  0U)) { stringState = JSONStringStateFinished; atStringCharacter++; goto finishedParsing; }
-        if(JK_EXPECTED(currentChar == (unsigned long)'\\', 0U)) { stringState = JSONStringStateEscape; continue; }
-        stringHash = calculateHash(stringHash, currentChar);
-        tokenBuffer[tokenBufferIdx++] = currentChar;
-        continue;
-      }
-
-      if(JK_EXPECTED(currentChar >= 0x80UL, 1U)) {
-        const unsigned char *nextValidCharacter = NULL;
-        UTF32                u32ch              = 0U;
-        ConversionResult     result;
-
-        if(JK_EXPECTED((result = ConvertSingleCodePointInUTF8(atStringCharacter, endOfBuffer, (UTF8 const **)&nextValidCharacter, &u32ch)) != conversionOK, 0U)) {
-          if((result == sourceIllegal) && ((parseState->parseOptionFlags & JKParseOptionLooseUnicode) == 0)) { jk_error(parseState, @"Illegal UTF8 sequence found in \"\" string.");              stringState = JSONStringStateError; goto finishedParsing; }
-          if(result == sourceExhausted)                                                                      { jk_error(parseState, @"End of buffer reached while parsing UTF8 in \"\" string."); stringState = JSONStringStateError; goto finishedParsing; }
-          if(jk_string_add_unicodeCodePoint(parseState, u32ch, &tokenBufferIdx, &stringHash))                { jk_error(parseState, @"Internal error: Unable to add UTF8 sequence to internal string buffer. %@ line #%ld", [NSString stringWithUTF8String:__FILE__], (long)__LINE__); stringState = JSONStringStateError; goto finishedParsing; }
-          atStringCharacter = nextValidCharacter - 1;
+      if(JK_EXPECTED(currentChar >= 0x20UL, 1U)) {
+        if(JK_EXPECTED(currentChar < (unsigned long)0x80, 1U)) { // Not a UTF8 sequence
+          if(JK_EXPECTED(currentChar == (unsigned long)'"',  0U)) { stringState = JSONStringStateFinished; atStringCharacter++; goto finishedParsing; }
+          if(JK_EXPECTED(currentChar == (unsigned long)'\\', 0U)) { stringState = JSONStringStateEscape; continue; }
+          stringHash = calculateHash(stringHash, currentChar);
+          tokenBuffer[tokenBufferIdx++] = currentChar;
           continue;
-        } else {
-          while(atStringCharacter < nextValidCharacter) { tokenBuffer[tokenBufferIdx++] = *atStringCharacter; stringHash = calculateHash(stringHash, *atStringCharacter++); }
-          atStringCharacter--;
-          continue;
+        } else { // UTF8 sequence
+          const unsigned char *nextValidCharacter = NULL;
+          UTF32                u32ch              = 0U;
+          ConversionResult     result;
+          
+          if(JK_EXPECTED((result = ConvertSingleCodePointInUTF8(atStringCharacter, endOfBuffer, (UTF8 const **)&nextValidCharacter, &u32ch)) != conversionOK, 0U)) {
+            if((result == sourceIllegal) && ((parseState->parseOptionFlags & JKParseOptionLooseUnicode) == 0)) { jk_error(parseState, @"Illegal UTF8 sequence found in \"\" string.");              stringState = JSONStringStateError; goto finishedParsing; }
+            if(result == sourceExhausted)                                                                      { jk_error(parseState, @"End of buffer reached while parsing UTF8 in \"\" string."); stringState = JSONStringStateError; goto finishedParsing; }
+            if(jk_string_add_unicodeCodePoint(parseState, u32ch, &tokenBufferIdx, &stringHash))                { jk_error(parseState, @"Internal error: Unable to add UTF8 sequence to internal string buffer. %@ line #%ld", [NSString stringWithUTF8String:__FILE__], (long)__LINE__); stringState = JSONStringStateError; goto finishedParsing; }
+            atStringCharacter = nextValidCharacter - 1;
+            continue;
+          } else {
+            while(atStringCharacter < nextValidCharacter) { tokenBuffer[tokenBufferIdx++] = *atStringCharacter; stringHash = calculateHash(stringHash, *atStringCharacter++); }
+            atStringCharacter--;
+            continue;
+          }
         }
+      } else { // currentChar < 0x20
+        jk_error(parseState, @"Invalid character < 0x20 found in string: 0x%2.2x.", currentChar); stringState = JSONStringStateError; goto finishedParsing;
       }
 
-      if(JK_EXPECTED(currentChar < 0x20UL, 0U)) { jk_error(parseState, @"Invalid character < 0x20 found in string: 0x%2.2x.", currentChar); stringState = JSONStringStateError; goto finishedParsing; }
-
-    } else {
+    } else { // stringState != JSONStringStateParsing
       int isSurrogate = 1;
 
       switch(stringState) {
