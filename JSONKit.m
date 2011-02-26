@@ -1496,6 +1496,26 @@ static id json_parse_it(JKParseState *parseState) {
   return([[JSONDecoder decoderWithParseOptions:parseOptionFlags] parseUTF8String:utf8String length:utf8Length error:error]);
 }
 
+- (NSData *)JSONData
+{
+	return([self JSONDataWithOptions:JKSerializeOptionNone error:NULL]);
+}
+
+- (NSData *)JSONDataWithOptions:(JKSerializeOptionFlags)serializeOptions error:(NSError **)error
+{
+	return(jk_encode(self, serializeOptions, error));
+}
+
+- (NSString *)JSONString
+{
+	return([self JSONStringWithOptions:JKSerializeOptionNone error:NULL]);
+}
+
+- (NSString *)JSONStringWithOptions:(JKSerializeOptionFlags)serializeOptions error:(NSError **)error
+{
+	return([[[NSString alloc] initWithData:[self JSONDataWithOptions:serializeOptions error:error] encoding:NSUTF8StringEncoding] autorelease]);
+}
+
 @end
 
 @implementation NSData (JSONKit)
