@@ -79,84 +79,9 @@ typedef unsigned int   NSUInteger;
 #define _JSONKIT_H_
 
 #define JSONKIT_VERSION_MAJOR 1
-#define JSONKIT_VERSION_MINOR 3
+#define JSONKIT_VERSION_MINOR 4
 
-typedef NSUInteger JKHash;
 typedef NSUInteger JKFlags;
-typedef NSUInteger JKTokenType;
-typedef JKFlags    JKManagedBufferFlags;
-typedef JKFlags    JKObjectStackFlags;
-
-typedef struct {
-  unsigned char *ptr;
-  size_t         length;
-} JKPtrRange;
-
-typedef struct {
-  const unsigned char *ptr;
-  size_t               length;
-} JKConstPtrRange;
-
-typedef struct {
-  size_t location, length;
-} JKRange;
-
-typedef struct {
-  JKPtrRange           bytes;
-  JKManagedBufferFlags flags;
-  size_t               roundSizeUpToMultipleOf;
-} JKManagedBuffer;
-
-typedef struct {
-  void               **objects, **keys;
-  JKHash              *hashes;
-  size_t              *sizes;
-  size_t               count, index, roundSizeUpToMultipleOf;
-  JKObjectStackFlags   flags;
-} JKObjectStack;
-
-typedef struct {
-  JKPtrRange bytes;
-} JKBuffer;
-
-typedef struct {
-  JKConstPtrRange bytes;
-} JKConstBuffer;
-
-typedef NSUInteger JKValueType;
-
-typedef struct {
-  JKConstPtrRange ptrRange;
-  JKHash          hash;
-  JKValueType     type;
-  union {
-    long long          longLongValue;
-    unsigned long long unsignedLongLongValue;
-    double             doubleValue;
-  } number;
-} JKTokenValue;
-
-typedef struct {
-  JKConstPtrRange tokenPtrRange;
-  JKTokenType     type;
-  JKTokenValue    value;
-  JKManagedBuffer tokenBuffer;
-} JKParseToken;
-
-
-typedef struct {
-  void          *object;
-  JKHash         hash;
-  size_t         size;
-  unsigned char *bytes;
-  JKValueType    type;
-  unsigned char  age;
-} JKTokenCacheItem;
-
-typedef struct {
-  JKTokenCacheItem *items;
-  size_t            count, clockIdx;
-} JKTokenCache;
 
 /*
   JKParseOptionComments        : Allow C style // and /_* ... *_/ (without a _, obviously) comments in JSON.
@@ -177,29 +102,6 @@ enum {
 };
 typedef JKFlags JKParseOptionFlags;
 
-typedef id (*NSNumberAllocImp)(id object, SEL selector);
-typedef id (*NSNumberInitWithUnsignedLongLongImp)(id object, SEL selector, unsigned long long value);
-
-typedef struct {
-  Class NSNumberClass;
-  NSNumberAllocImp NSNumberAlloc;
-  NSNumberInitWithUnsignedLongLongImp NSNumberInitWithUnsignedLongLong;
-} JKObjCImpCache;
-
-typedef struct {
-  JKParseOptionFlags  parseOptionFlags;
-  JKConstBuffer       stringBuffer;
-  size_t              atIndex, lineNumber, lineStartIndex;
-  size_t              prev_atIndex, prev_lineNumber, prev_lineStartIndex;
-  int                 errorIsPrev;
-  JKParseToken        token;
-  JKObjectStack       objectStack;
-  JKTokenCache        cache;
-  JKObjCImpCache      objCImpCache;
-  NSError            *error;
-} JKParseState;
-
-
 enum {
   JKSerializeOptionNone           = 0,
   JKSerializeOptionPretty         = (1 << 0), // Not implemented yet...
@@ -208,13 +110,14 @@ enum {
 };
 typedef JKFlags JKSerializeOptionFlags;
 
-
 #ifdef    __OBJC__
+
+typedef struct JKParseState JKParseState; // Opaque internal, private type.
 
 // As a general rule of thumb, if you use a method that doesn't accept a JKParseOptionFlags argument, it defaults to JKParseOptionStrict
 
 @interface JSONDecoder : NSObject {
-  JKParseState parseState;
+  JKParseState *parseState;
 }
 + (id)decoder;
 + (id)decoderWithParseOptions:(JKParseOptionFlags)parseOptionFlags;
