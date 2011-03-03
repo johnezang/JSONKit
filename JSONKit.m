@@ -131,7 +131,7 @@
 // JK_CACHE_PROBES is the number of probe attempts.
 #define JK_CACHE_PROBES        (4UL)
 // JK_INIT_CACHE_AGE must be (1 << AGE) - 1
-#define JK_INIT_CACHE_AGE      (31)
+#define JK_INIT_CACHE_AGE      (0)
 
 // JK_TOKENBUFFER_SIZE is the default stack size for the temporary buffer used to hold "non-simple" strings (i.e., contains \ escapes)
 #define JK_TOKENBUFFER_SIZE    (1024UL * 2UL)
@@ -342,14 +342,14 @@ struct JKConstBuffer {
 
 struct JKTokenValue {
   JKConstPtrRange   ptrRange;
-  JKHash            hash;
-  JKTokenCacheItem *cacheItem;
   JKValueType       type;
+  JKHash            hash;
   union {
     long long          longLongValue;
     unsigned long long unsignedLongLongValue;
     double             doubleValue;
   } number;
+  JKTokenCacheItem *cacheItem;
 };
 
 struct JKParseToken {
@@ -366,13 +366,13 @@ struct JKTokenCacheItem {
   size_t         size;
   unsigned char *bytes;
   JKValueType    type;
-  unsigned char  age;
 };
 
 struct JKTokenCache {
   JKTokenCacheItem *items;
   size_t            count;
-  unsigned int      prng_lcg;
+  unsigned int      prng_lfsr;
+  unsigned char     age[JK_CACHE_SLOTS];
 };
 
 struct JKObjCImpCache {
@@ -386,12 +386,12 @@ struct JKParseState {
   JKConstBuffer       stringBuffer;
   size_t              atIndex, lineNumber, lineStartIndex;
   size_t              prev_atIndex, prev_lineNumber, prev_lineStartIndex;
-  int                 errorIsPrev;
   JKParseToken        token;
   JKObjectStack       objectStack;
   JKTokenCache        cache;
   JKObjCImpCache      objCImpCache;
   NSError            *error;
+  int                 errorIsPrev;
 };
 
 struct JKFastClassLookup {
@@ -459,12 +459,14 @@ static const UTF8  firstByteMark[7]   = { 0x00, 0x00, 0xC0, 0xE0, 0xF0, 0xF8, 0x
 #define JK_END_STRING_PTR(x) (&((x)->stringBuffer.bytes.ptr[(x)->stringBuffer.bytes.length]))
 
 
-static JKArray *_JKArrayCreate(id *objects, NSUInteger count);
+static JKArray          *_JKArrayCreate(id *objects, NSUInteger count);
 
 static JKDictionary     *_JKDictionaryCreate(id *keys, NSUInteger *keyHashes, id *objects, NSUInteger count);
 static JKHashTableEntry *_JKDictionaryHashEntry(JKDictionary *dictionary);
 static NSUInteger        _JKDictionaryCapacity(JKDictionary *dictionary);
 static void              _JKDictionaryAddObject(JKDictionary *dictionary, NSUInteger keyHash, id key, id object);
+
+static void _JSONDecoderCleanup(JSONDecoder *decoder);
 
 static void jk_managedBuffer_release(JKManagedBuffer *managedBuffer);
 static void jk_managedBuffer_setToStackBuffer(JKManagedBuffer *managedBuffer, unsigned char *ptr, size_t length);
@@ -503,7 +505,7 @@ JK_STATIC_INLINE size_t jk_min(size_t a, size_t b);
 JK_STATIC_INLINE size_t jk_max(size_t a, size_t b);
 JK_STATIC_INLINE JKHash calculateHash(JKHash currentHash, unsigned char c);
 
-
+#pragma mark -
 @interface JKArray : NSArray <NSCopying, NSMutableCopying, NSFastEnumeration> {
   id         *objects;
   NSUInteger  count;
@@ -517,8 +519,13 @@ static size_t _JKArrayInstanceSize = 0UL;
 
 + (void)load
 {
+  NSAutoreleasePool *pool = [[NSAutoreleasePool alloc] init]; // Though technically not required, the run time enviornment at +load time may be less than ideal.
+
   _JKArrayClass        = [JKArray class];
   _JKArrayInstanceSize = class_getInstanceSize(_JKArrayClass);
+  if(_JKArrayInstanceSize < 16UL) { _JKArrayInstanceSize = 16UL; }
+
+  [pool release]; pool = NULL;
 }
 
 + (id)allocWithZone:(NSZone *)zone
@@ -531,10 +538,8 @@ static size_t _JKArrayInstanceSize = 0UL;
 static JKArray *_JKArrayCreate(id *objects, NSUInteger count) {
   NSCParameterAssert((objects != NULL) && (_JKArrayClass != NULL) && (_JKArrayInstanceSize > 0UL));
   JKArray *array = NULL;
-  if(JK_EXPECT_T((array = (JKArray *)calloc(1UL, _JKArrayInstanceSize)) != NULL)) {
-    array->isa = _JKArrayClass;
-    if(JK_EXPECT_F((array = [array init]) == NULL)) { return(NULL); }
-
+  if(JK_EXPECT_T((array = (JKArray *)calloc(1UL, _JKArrayInstanceSize)) != NULL)) { // Directly allocate the JKArray instance via calloc.
+    array->isa   = _JKArrayClass;
     array->count = count;
     if(JK_EXPECT_F((array->objects = (id *)malloc(sizeof(id) * array->count)) == NULL)) { [array autorelease]; return(NULL); }
     memcpy(array->objects, objects, array->count * sizeof(id));
@@ -598,8 +603,7 @@ static JKArray *_JKArrayCreate(id *objects, NSUInteger count) {
 
 @end
 
-
-
+#pragma mark -
 @interface JKDictionaryEnumerator : NSEnumerator {
   id         collection;
   NSUInteger nextObject;
@@ -652,6 +656,7 @@ static JKArray *_JKArrayCreate(id *objects, NSUInteger count) {
 
 @end
 
+#pragma mark -
 @interface JKDictionary : NSDictionary <NSCopying, NSMutableCopying, NSFastEnumeration> {
   NSUInteger count, capacity;
   JKHashTableEntry *entry;
@@ -660,22 +665,18 @@ static JKArray *_JKArrayCreate(id *objects, NSUInteger count) {
 
 @implementation JKDictionary
 
-// These values are taken from CF-550 CFBasicHash.m.  As a bonus, they allign very well with our JKHashTableEntry struct too.
-static const NSUInteger jk_dictionaryCapacities[] = {
-  0UL, 3UL, 7UL, 13UL, 23UL, 41UL, 71UL, 127UL, 191UL, 251UL, 383UL, 631UL, 1087UL, 1723UL,
-  2803UL, 4523UL, 7351UL, 11959UL, 19447UL, 31231UL, 50683UL, 81919UL, 132607UL,
-  214519UL, 346607UL, 561109UL, 907759UL, 1468927UL, 2376191UL, 3845119UL,
-  6221311UL, 10066421UL, 16287743UL, 26354171UL, 42641881UL, 68996069UL,
-  111638519UL, 180634607UL, 292272623UL, 472907251UL
-};
-
 static Class  _JKDictionaryClass        = NULL;
 static size_t _JKDictionaryInstanceSize = 0UL;
 
 + (void)load
 {
+  NSAutoreleasePool *pool = [[NSAutoreleasePool alloc] init]; // Though technically not required, the run time enviornment at +load time may be less than ideal.
+
   _JKDictionaryClass        = [JKDictionary class];
   _JKDictionaryInstanceSize = class_getInstanceSize(_JKDictionaryClass);
+  if(_JKDictionaryInstanceSize < 16UL) { _JKDictionaryInstanceSize = 16UL; }
+
+  [pool release]; pool = NULL;
 }
 
 + (id)allocWithZone:(NSZone *)zone
@@ -685,14 +686,22 @@ static size_t _JKDictionaryInstanceSize = 0UL;
   return(NULL);
 }
 
+// These values are taken from Core Foundation CF-550 CFBasicHash.m.  As a bonus, they allign very well with our JKHashTableEntry struct too.
+static const NSUInteger jk_dictionaryCapacities[] = {
+  0UL, 3UL, 7UL, 13UL, 23UL, 41UL, 71UL, 127UL, 191UL, 251UL, 383UL, 631UL, 1087UL, 1723UL,
+  2803UL, 4523UL, 7351UL, 11959UL, 19447UL, 31231UL, 50683UL, 81919UL, 132607UL,
+  214519UL, 346607UL, 561109UL, 907759UL, 1468927UL, 2376191UL, 3845119UL,
+  6221311UL, 10066421UL, 16287743UL, 26354171UL, 42641881UL, 68996069UL,
+  111638519UL, 180634607UL, 292272623UL, 472907251UL
+};
+
 static JKDictionary *_JKDictionaryCreate(id *keys, NSUInteger *keyHashes, id *objects, NSUInteger count) {
   NSCParameterAssert((keys != NULL) && (keyHashes != NULL) && (objects != NULL) && (_JKDictionaryClass != NULL) && (_JKDictionaryInstanceSize > 0UL));
   JKDictionary *dictionary = NULL;
-  if(JK_EXPECT_T((dictionary = (JKDictionary *)calloc(1UL, _JKDictionaryInstanceSize)) != NULL)) {
+  if(JK_EXPECT_T((dictionary = (JKDictionary *)calloc(1UL, _JKDictionaryInstanceSize)) != NULL)) { // Directly allocate the JKArray instance via calloc.
     dictionary->isa = _JKDictionaryClass;
-    if(JK_EXPECT_F((dictionary = [dictionary init]) == NULL)) { return(NULL); }
     
-    NSUInteger bottom = 0UL, top = sizeof(jk_dictionaryCapacities) / sizeof(NSUInteger), mid = 0UL, tableSize = lround(floor((count + 0UL) * 1.33));
+    NSUInteger bottom = 0UL, top = sizeof(jk_dictionaryCapacities) / sizeof(NSUInteger), mid = 0UL, tableSize = lround(floor((count) * 1.33));
     while(top > bottom) { mid = (top + bottom) / 2UL; if(jk_dictionaryCapacities[mid] < tableSize) { bottom = mid + 1UL; } else { top = mid; } }
     
     dictionary->capacity = jk_dictionaryCapacities[bottom];
@@ -738,6 +747,7 @@ static void _JKDictionaryAddObject(JKDictionary *dictionary, NSUInteger keyHash,
     NSUInteger entryIdx = (keyEntry + idx) % dictionary->capacity;
     JKHashTableEntry *atEntry = &dictionary->entry[entryIdx];
     if(JK_EXPECT_F(atEntry->keyHash == keyHash) && JK_EXPECT_T(atEntry->key != NULL) && (JK_EXPECT_F(key == atEntry->key) || JK_EXPECT_F(CFEqual(atEntry->key, key)))) {
+      NSCParameterAssert((atEntry->object != NULL) && (dictionary->count > 0UL));
       CFRelease(atEntry->key);    atEntry->key    = NULL;
       CFRelease(atEntry->object); atEntry->object = NULL;
       atEntry->keyHash = 0UL;
@@ -811,7 +821,7 @@ static void _JKDictionaryAddObject(JKDictionary *dictionary, NSUInteger keyHash,
 }
 
 @end
-
+#pragma mark -
 
 JK_STATIC_INLINE size_t jk_min(size_t a, size_t b) { return((a < b) ? a : b); }
 JK_STATIC_INLINE size_t jk_max(size_t a, size_t b) { return((a > b) ? a : b); }
@@ -852,6 +862,8 @@ static void jk_error(JKParseState *parseState, NSString *format, ...) {
   }
 }
 
+#pragma mark -
+#pragma mark Buffer and Object Stack management functions
 
 static void jk_managedBuffer_release(JKManagedBuffer *managedBuffer) {
   if((managedBuffer->flags & JKManagedBufferMustFree)) {
@@ -987,6 +999,9 @@ static int jk_objectStack_resize(JKObjectStack *objectStack, size_t newCount) {
   return(returnCode);
 }
 
+////////////
+#pragma mark -
+#pragma mark Unicode related functions
 
 JK_STATIC_INLINE ConversionResult isValidCodePoint(UTF32 *u32CodePoint) {
   ConversionResult result = conversionOK;
@@ -1113,6 +1128,9 @@ JK_STATIC_INLINE int jk_string_add_unicodeCodePoint(JKParseState *parseState, ui
   return(0);
 }
 
+////////////
+#pragma mark -
+#pragma mark Decoding / parsing / deserializing functions
 
 static int jk_parse_string(JKParseState *parseState) {
   NSCParameterAssert((parseState != NULL) && (JK_AT_STRING_PTR(parseState) <= JK_END_STRING_PTR(parseState)));
@@ -1516,83 +1534,6 @@ static int jk_parse_next_token(JKParseState *parseState) {
   return(stopParsing);
 }
 
-JK_STATIC_INLINE void jk_cache_age(JKParseState *parseState) {
-  parseState->cache.prng_lcg = (parseState->cache.prng_lcg * 0x41c64e6dU) + 0x3039U;
-  parseState->cache.items[parseState->cache.prng_lcg & (parseState->cache.count - 1UL)].age >>= 1;
-}
-
-static void *jk_cachedObjects(JKParseState *parseState) {
-  unsigned long  bucket     = parseState->token.value.hash & (parseState->cache.count - 1UL), setBucket = 0UL, useableBucket = 0UL, x = 0UL;
-  void          *parsedAtom = NULL;
-
-  jk_cache_age(parseState);
-
-  if(JK_EXPECT_F(parseState->token.value.ptrRange.length == 0UL) && JK_EXPECT_T(parseState->token.value.type == JKValueTypeString)) { return(@""); }
-
-  for(x = 0UL; x < JK_CACHE_PROBES; x++) {
-    if(JK_EXPECT_F(parseState->cache.items[bucket].object == NULL)) { setBucket = 1UL; useableBucket = bucket; break; }
-
-    if((JK_EXPECT_T(parseState->cache.items[bucket].hash == parseState->token.value.hash)) && (JK_EXPECT_T(parseState->cache.items[bucket].size == parseState->token.value.ptrRange.length)) && (JK_EXPECT_T(parseState->cache.items[bucket].type == parseState->token.value.type)) && (JK_EXPECT_T(parseState->cache.items[bucket].bytes != NULL)) && (JK_EXPECT_T(strncmp((const char *)parseState->cache.items[bucket].bytes, (const char *)parseState->token.value.ptrRange.ptr, parseState->token.value.ptrRange.length) == 0U))) {
-      parseState->cache.items[bucket].age = (parseState->cache.items[bucket].age << 1) | 1U;
-      parseState->token.value.cacheItem   = &parseState->cache.items[bucket];
-      NSCParameterAssert(parseState->cache.items[bucket].object != NULL);
-      return((void *)CFRetain(parseState->cache.items[bucket].object));
-    } else {
-      if(JK_EXPECT_F(setBucket == 0UL) && JK_EXPECT_F(parseState->cache.items[bucket].age == 0U)) { setBucket = 1UL; useableBucket = bucket; }
-      if(JK_EXPECT_F(setBucket == 0UL))                                                           { parseState->cache.items[bucket].age >>= 1; jk_cache_age(parseState); }
-      jk_cache_age(parseState);
-      bucket = (parseState->token.value.hash + (parseState->token.value.ptrRange.length * (x + 1UL)) + (parseState->token.value.type * (x + 1UL)) + (3UL * (x + 1UL))) & (parseState->cache.count - 1UL);
-    }
-  }
-
-  switch(parseState->token.value.type) {
-    case JKValueTypeString:           parsedAtom = (void *)CFStringCreateWithBytes(NULL, parseState->token.value.ptrRange.ptr, parseState->token.value.ptrRange.length, kCFStringEncodingUTF8, 0); break;
-    case JKValueTypeLongLong:         parsedAtom = (void *)CFNumberCreate(NULL, kCFNumberLongLongType, &parseState->token.value.number.longLongValue);                                             break;
-    case JKValueTypeUnsignedLongLong:
-      if(parseState->token.value.number.unsignedLongLongValue <= LLONG_MAX) { parsedAtom = (void *)CFNumberCreate(NULL, kCFNumberLongLongType, &parseState->token.value.number.unsignedLongLongValue); }
-      else { parsedAtom = (void *)parseState->objCImpCache.NSNumberInitWithUnsignedLongLong(parseState->objCImpCache.NSNumberAlloc(parseState->objCImpCache.NSNumberClass, @selector(alloc)), @selector(initWithUnsignedLongLong:), parseState->token.value.number.unsignedLongLongValue); }
-      break;
-    case JKValueTypeDouble:           parsedAtom = (void *)CFNumberCreate(NULL, kCFNumberDoubleType,   &parseState->token.value.number.doubleValue);                                               break;
-    default: jk_error(parseState, @"Internal error: Unknown token value type. %@ line #%ld", [NSString stringWithUTF8String:__FILE__], (long)__LINE__); break;
-  }
-  
-  if(JK_EXPECT_T(setBucket) && (JK_EXPECT_T(parsedAtom != NULL))) {
-    bucket = useableBucket;
-    if(JK_EXPECT_T((parseState->cache.items[bucket].object != NULL))) { CFRelease(parseState->cache.items[bucket].object); parseState->cache.items[bucket].object = NULL; }
-
-    if(JK_EXPECT_T((parseState->cache.items[bucket].bytes = (unsigned char *)reallocf(parseState->cache.items[bucket].bytes, parseState->token.value.ptrRange.length)) != NULL)) {
-      memcpy(parseState->cache.items[bucket].bytes, parseState->token.value.ptrRange.ptr, parseState->token.value.ptrRange.length);
-      parseState->cache.items[bucket].object = (void *)CFRetain(parsedAtom);
-      parseState->cache.items[bucket].hash   = parseState->token.value.hash;
-      parseState->cache.items[bucket].cfHash = 0UL;
-      parseState->cache.items[bucket].size   = parseState->token.value.ptrRange.length;
-      parseState->cache.items[bucket].age    = JK_INIT_CACHE_AGE;
-      parseState->cache.items[bucket].type   = parseState->token.value.type;
-      parseState->token.value.cacheItem      = &parseState->cache.items[bucket];
-    }
-  }
-
-  return(parsedAtom);
-}
-
-static void *jk_object_for_token(JKParseState *parseState) {
-  void *parsedAtom = NULL;
-
-  parseState->token.value.cacheItem = NULL;
-  switch(parseState->token.type) {
-    case JKTokenTypeString:      parsedAtom = jk_cachedObjects(parseState);    break;
-    case JKTokenTypeNumber:      parsedAtom = jk_cachedObjects(parseState);    break;
-    case JKTokenTypeObjectBegin: parsedAtom = jk_parse_dictionary(parseState); break;
-    case JKTokenTypeArrayBegin:  parsedAtom = jk_parse_array(parseState);      break;
-    case JKTokenTypeTrue:        parsedAtom = (void *)kCFBooleanTrue;          break;
-    case JKTokenTypeFalse:       parsedAtom = (void *)kCFBooleanFalse;         break;
-    case JKTokenTypeNull:        parsedAtom = (void *)kCFNull;                 break;
-    default: jk_error(parseState, @"Internal error: Unknown token type. %@ line #%ld", [NSString stringWithUTF8String:__FILE__], (long)__LINE__); break;
-  }
-
-  return(parsedAtom);
-}
-
 static void jk_error_parse_accept_or3(JKParseState *parseState, int state, NSString *or1String, NSString *or2String, NSString *or3String) {
   NSString *acceptStrings[16];
   int acceptIdx = 0;
@@ -1650,7 +1591,7 @@ static void *jk_create_dictionary(JKParseState *parseState, size_t startingObjec
 
   parseState->objectStack.index--;
 
-  parsedDictionary = _JKDictionaryCreate((id *)&parseState->objectStack.keys[startingObjectIndex], &parseState->objectStack.cfHashes[startingObjectIndex], (id *)&parseState->objectStack.objects[startingObjectIndex], (parseState->objectStack.index - startingObjectIndex));
+  parsedDictionary = _JKDictionaryCreate((id *)&parseState->objectStack.keys[startingObjectIndex], (NSUInteger *)&parseState->objectStack.cfHashes[startingObjectIndex], (id *)&parseState->objectStack.objects[startingObjectIndex], (parseState->objectStack.index - startingObjectIndex));
 
   return(parsedDictionary);
 }
@@ -1751,6 +1692,111 @@ static id json_parse_it(JKParseState *parseState) {
   return(parsedObject);
 }
 
+////////////
+#pragma mark -
+#pragma mark Object cache
+
+// This uses a Galois Linear Feedback Shift Register (LFSR) PRNG to pick which item in the cache to age. It has a period of (2^32)-1.
+// NOTE: A LFSR *MUST* be initialized to a non-zero value.
+JK_STATIC_INLINE void jk_cache_age(JKParseState *parseState) {
+  parseState->cache.prng_lfsr = (parseState->cache.prng_lfsr >> 1) ^ ((0U - (parseState->cache.prng_lfsr & 1U)) & 0x80200003U);
+  parseState->cache.age[parseState->cache.prng_lfsr & (parseState->cache.count - 1UL)] >>= 1;
+}
+
+// The object cache is nothing more than a hash table with open addressing collision resolution that is bounded by JK_CACHE_PROBES attempts.
+//
+// The hash table is a linear C array of JKTokenCacheItem.  The terms "item" and "bucket" are synonymous with the index in to the cache array, i.e. cache.items[bucket].
+//
+// Items in the cache have an age associated with them.  The age is the number of rightmost 1 bits, i.e. 0000 = 0, 0001 = 1, 0011 = 2, 0111 = 3, 1111 = 4.
+// This allows us to use left and right shifts to add or subtract from an items age.  Add = (age << 1) | 1.  Subtract = age >> 0.  Subtract is synonymous with "age" (i.e., age an item).
+// The reason for this is it allows us to perform saturated adds and subtractions, which is branchless.
+// The primitive C type MUST be unsigned.  It is currently a "char", which allows (at a minimum and in practice) 8 bits.
+//
+// A "useable bucket" is a bucket that is not in use (never populated), or has an age == 0.
+//
+// When an item is found in the cache, it's age is incremented.
+// If a useable bucket hasn't been found, the current item (bucket) is aged along with two random items.
+//
+// If a value is not found in the cache, and no useable bucket has been found, that value is not added to the cache.
+
+static void *jk_cachedObjects(JKParseState *parseState) {
+  unsigned long  bucket     = parseState->token.value.hash & (parseState->cache.count - 1UL), setBucket = 0UL, useableBucket = 0UL, x = 0UL;
+  void          *parsedAtom = NULL;
+    
+  if(JK_EXPECT_F(parseState->token.value.ptrRange.length == 0UL) && JK_EXPECT_T(parseState->token.value.type == JKValueTypeString)) { return(@""); }
+  
+  for(x = 0UL; x < JK_CACHE_PROBES; x++) {
+    if(JK_EXPECT_F(parseState->cache.items[bucket].object == NULL)) { setBucket = 1UL; useableBucket = bucket; break; }
+    
+    if((JK_EXPECT_T(parseState->cache.items[bucket].hash == parseState->token.value.hash)) && (JK_EXPECT_T(parseState->cache.items[bucket].size == parseState->token.value.ptrRange.length)) && (JK_EXPECT_T(parseState->cache.items[bucket].type == parseState->token.value.type)) && (JK_EXPECT_T(parseState->cache.items[bucket].bytes != NULL)) && (JK_EXPECT_T(strncmp((const char *)parseState->cache.items[bucket].bytes, (const char *)parseState->token.value.ptrRange.ptr, parseState->token.value.ptrRange.length) == 0U))) {
+      parseState->cache.age[bucket]     = (parseState->cache.age[bucket] << 1) | 1U;
+      parseState->token.value.cacheItem = &parseState->cache.items[bucket];
+      NSCParameterAssert(parseState->cache.items[bucket].object != NULL);
+      return((void *)CFRetain(parseState->cache.items[bucket].object));
+    } else {
+      if(JK_EXPECT_F(setBucket == 0UL) && JK_EXPECT_F(parseState->cache.age[bucket] == 0U)) { setBucket = 1UL; useableBucket = bucket; }
+      if(JK_EXPECT_F(setBucket == 0UL))                                                     { parseState->cache.age[bucket] >>= 1; jk_cache_age(parseState); jk_cache_age(parseState); }
+      // This is the open addressing function.  The values length and type are used as a form of "double hashing" to distribute values with the same effective value hash across different object cache buckets.
+      // The values type is a prime number that is relatively coprime to the other primes in the set of value types and the number of hash table buckets.
+      bucket = (parseState->token.value.hash + (parseState->token.value.ptrRange.length * (x + 1UL)) + (parseState->token.value.type * (x + 1UL)) + (3UL * (x + 1UL))) & (parseState->cache.count - 1UL);
+    }
+  }
+  
+  switch(parseState->token.value.type) {
+    case JKValueTypeString:           parsedAtom = (void *)CFStringCreateWithBytes(NULL, parseState->token.value.ptrRange.ptr, parseState->token.value.ptrRange.length, kCFStringEncodingUTF8, 0); break;
+    case JKValueTypeLongLong:         parsedAtom = (void *)CFNumberCreate(NULL, kCFNumberLongLongType, &parseState->token.value.number.longLongValue);                                             break;
+    case JKValueTypeUnsignedLongLong:
+      if(parseState->token.value.number.unsignedLongLongValue <= LLONG_MAX) { parsedAtom = (void *)CFNumberCreate(NULL, kCFNumberLongLongType, &parseState->token.value.number.unsignedLongLongValue); }
+      else { parsedAtom = (void *)parseState->objCImpCache.NSNumberInitWithUnsignedLongLong(parseState->objCImpCache.NSNumberAlloc(parseState->objCImpCache.NSNumberClass, @selector(alloc)), @selector(initWithUnsignedLongLong:), parseState->token.value.number.unsignedLongLongValue); }
+      break;
+    case JKValueTypeDouble:           parsedAtom = (void *)CFNumberCreate(NULL, kCFNumberDoubleType,   &parseState->token.value.number.doubleValue);                                               break;
+    default: jk_error(parseState, @"Internal error: Unknown token value type. %@ line #%ld", [NSString stringWithUTF8String:__FILE__], (long)__LINE__); break;
+  }
+  
+  if(JK_EXPECT_T(setBucket) && (JK_EXPECT_T(parsedAtom != NULL))) {
+    bucket = useableBucket;
+    if(JK_EXPECT_T((parseState->cache.items[bucket].object != NULL))) { CFRelease(parseState->cache.items[bucket].object); parseState->cache.items[bucket].object = NULL; }
+    
+    if(JK_EXPECT_T((parseState->cache.items[bucket].bytes = (unsigned char *)reallocf(parseState->cache.items[bucket].bytes, parseState->token.value.ptrRange.length)) != NULL)) {
+      memcpy(parseState->cache.items[bucket].bytes, parseState->token.value.ptrRange.ptr, parseState->token.value.ptrRange.length);
+      parseState->cache.items[bucket].object = (void *)CFRetain(parsedAtom);
+      parseState->cache.items[bucket].hash   = parseState->token.value.hash;
+      parseState->cache.items[bucket].cfHash = 0UL;
+      parseState->cache.items[bucket].size   = parseState->token.value.ptrRange.length;
+      parseState->cache.items[bucket].type   = parseState->token.value.type;
+      parseState->token.value.cacheItem      = &parseState->cache.items[bucket];
+      parseState->cache.age[bucket]          = JK_INIT_CACHE_AGE;
+    } else { // The realloc failed, so clear the appropriate fields.
+      parseState->cache.items[bucket].hash   = 0UL;
+      parseState->cache.items[bucket].cfHash = 0UL;
+      parseState->cache.items[bucket].size   = 0UL;
+      parseState->cache.items[bucket].type   = 0UL;
+    }
+  }
+  
+  return(parsedAtom);
+}
+
+
+static void *jk_object_for_token(JKParseState *parseState) {
+  void *parsedAtom = NULL;
+  
+  parseState->token.value.cacheItem = NULL;
+  switch(parseState->token.type) {
+    case JKTokenTypeString:      parsedAtom = jk_cachedObjects(parseState);    break;
+    case JKTokenTypeNumber:      parsedAtom = jk_cachedObjects(parseState);    break;
+    case JKTokenTypeObjectBegin: parsedAtom = jk_parse_dictionary(parseState); break;
+    case JKTokenTypeArrayBegin:  parsedAtom = jk_parse_array(parseState);      break;
+    case JKTokenTypeTrue:        parsedAtom = (void *)kCFBooleanTrue;          break;
+    case JKTokenTypeFalse:       parsedAtom = (void *)kCFBooleanFalse;         break;
+    case JKTokenTypeNull:        parsedAtom = (void *)kCFNull;                 break;
+    default: jk_error(parseState, @"Internal error: Unknown token type. %@ line #%ld", [NSString stringWithUTF8String:__FILE__], (long)__LINE__); break;
+  }
+  
+  return(parsedAtom);
+}
+
+#pragma mark -
 @implementation JSONDecoder
 
 static Class            _jk_NSNumberClass;
@@ -1759,7 +1805,7 @@ static NSNumberInitWithUnsignedLongLongImp _jk_NSNumberInitWithUnsignedLongLongI
 
 + (void)load
 {
-  NSAutoreleasePool *pool = [[NSAutoreleasePool alloc] init];
+  NSAutoreleasePool *pool = [[NSAutoreleasePool alloc] init]; // Though technically not required, the run time enviornment at +load time may be less than ideal.
   
   _jk_NSNumberClass = [NSNumber class];
   _jk_NSNumberAllocImp = (NSNumberAllocImp)[NSNumber methodForSelector:@selector(alloc)];
@@ -1805,7 +1851,8 @@ static NSNumberInitWithUnsignedLongLongImp _jk_NSNumberInitWithUnsignedLongLongI
   parseState->objCImpCache.NSNumberAlloc                    = _jk_NSNumberAllocImp;
   parseState->objCImpCache.NSNumberInitWithUnsignedLongLong = _jk_NSNumberInitWithUnsignedLongLongImp;
   
-  parseState->cache.count = JK_CACHE_SLOTS;
+  parseState->cache.prng_lfsr = 1U;
+  parseState->cache.count     = JK_CACHE_SLOTS;
   if((parseState->cache.items = (JKTokenCacheItem *)calloc(1UL, sizeof(JKTokenCacheItem) * parseState->cache.count)) == NULL) { goto errorExit; }
 
   return(self);
@@ -1815,17 +1862,22 @@ static NSNumberInitWithUnsignedLongLongImp _jk_NSNumberInitWithUnsignedLongLongI
   return(NULL);
 }
 
+// This is here primarily to support the NSString and NSData convienence functions so the autoreleased JSONDecoder can release most of its resources before the pool pops.
+static void _JSONDecoderCleanup(JSONDecoder *decoder) {
+  if((decoder != NULL) && (decoder->parseState != NULL)) {
+    jk_managedBuffer_release(&decoder->parseState->token.tokenBuffer);
+    jk_objectStack_release(&decoder->parseState->objectStack);
+    
+    [decoder clearCache];
+    if(decoder->parseState->cache.items != NULL) { free(decoder->parseState->cache.items); decoder->parseState->cache.items = NULL; }
+    
+    free(decoder->parseState); decoder->parseState = NULL;
+  }
+}
+
 - (void)dealloc
 {
-  if(parseState != NULL) {
-    jk_managedBuffer_release(&parseState->token.tokenBuffer);
-    jk_objectStack_release(&parseState->objectStack);
-
-    [self clearCache];
-    if(parseState->cache.items != NULL) { free(parseState->cache.items); parseState->cache.items = NULL; }
-
-    free(parseState); parseState = NULL;
-  }
+  _JSONDecoderCleanup(self);
   [super dealloc];
 }
 
@@ -1908,6 +1960,41 @@ static NSNumberInitWithUnsignedLongLongImp _jk_NSNumberInitWithUnsignedLongLongI
 
 @end
 
+/*
+ The NSString and NSData convience methods need a little bit of explination.
+ 
+ Prior to JSONKit v1.4, the NSString -objectFromJSONStringWithParseOptions:error: method looked like
+
+ const unsigned char *utf8String = (const unsigned char *)[self UTF8String];
+ if(utf8String == NULL) { return(NULL); }
+ size_t               utf8Length = strlen((const char *)utf8String); 
+ return([[JSONDecoder decoderWithParseOptions:parseOptionFlags] parseUTF8String:utf8String length:utf8Length error:error]);
+ 
+ This changed with v1.4 to a more complicated method.  The reason for this is to keep the amount of memory that is
+ allocated, but not yet freed because it is dependent on the autorelease pool to pop before it can be reclaimed.
+ 
+ In the simpler v1.3 code, this included all the bytes used to store the -UTF8String along with the JSONDecoder and all its overhead.
+ 
+ Now we use an autoreleased CFMutableData that is sized to the UTF8 length of the NSString in question and is used to hold the UTF8
+ conversion of said string.
+ 
+ Once parsed, the CFMutableData has its length set to 0.  This should, hopefully, allow the CFMutableData to realloc and/or free
+ the buffer.
+ 
+ Another change made was a slight modification to JSONDecoder so that most of the cleanup work that was done in -dealloc was moved
+ to a private, internal function.  These convience routines keep the pointer to the autoreleased JSONDecoder and calls
+ _JSONDecoderCleanup() to early release the decoders resources since we already know that particular decoder is not going to be used
+ again.  
+ 
+ If everything goes smoothly, this will most likely result in perhaps a few hundred bytes that are allocated but waiting for the
+ autorelease pool to pop.  This is compared to the thousands and easily hundreds of thousands of bytes that would have been in
+ autorelease limbo.  It's more complicated for us, but a win for the user.
+ 
+ Autorelease objects are used in case things don't go smoothly.  By having them autoreleased, we effectively guarentee that our
+ requirement to -release the object is always met, not matter what goes wrong.  The downside is having a an object or two in
+ autorelease limbo, but we've done our best to minimize that impact, so it all balances out.
+*/
+
 @implementation NSString (JSONKit)
 
 - (id)objectFromJSONString
@@ -1922,11 +2009,27 @@ static NSNumberInitWithUnsignedLongLongImp _jk_NSNumberInitWithUnsignedLongLongI
 
 - (id)objectFromJSONStringWithParseOptions:(JKParseOptionFlags)parseOptionFlags error:(NSError **)error
 {
-  const unsigned char *utf8String = (const unsigned char *)[self UTF8String];
-  if(utf8String == NULL) { return(NULL); }
-  size_t               utf8Length = strlen((const char *)utf8String);
+  id                returnObject = NULL;
+  CFMutableDataRef  mutableData  = NULL;
+  JSONDecoder      *decoder      = NULL;
+  
+  CFIndex    stringLength     = CFStringGetLength((CFStringRef)self);
+  NSUInteger stringUTF8Length = [self lengthOfBytesUsingEncoding:NSUTF8StringEncoding];
+  
+  if((mutableData = (CFMutableDataRef)[(id)CFDataCreateMutable(NULL, (NSUInteger)stringUTF8Length) autorelease]) != NULL) {
+    UInt8   *utf8String = CFDataGetMutableBytePtr(mutableData);
+    CFIndex  usedBytes  = 0L, convertedCount = 0L;
 
-  return([[JSONDecoder decoderWithParseOptions:parseOptionFlags] parseUTF8String:utf8String length:utf8Length error:error]);
+    convertedCount = CFStringGetBytes((CFStringRef)self, CFRangeMake(0L, stringLength), kCFStringEncodingUTF8, '?', NO, utf8String, (NSUInteger)stringUTF8Length, &usedBytes);
+    if(JK_EXPECT_F(convertedCount != stringLength) || JK_EXPECT_F(usedBytes < 0L)) { if(error != NULL) { *error = [NSError errorWithDomain:@"JKErrorDomain" code:-1L userInfo:[NSDictionary dictionaryWithObject:@"An error occured converting the contents of a NSString to UTF8." forKey:NSLocalizedDescriptionKey]]; } goto exitNow; }
+    
+    returnObject = [(decoder = [JSONDecoder decoderWithParseOptions:parseOptionFlags]) parseUTF8String:(const unsigned char *)utf8String length:(size_t)usedBytes error:error];
+  }
+  
+exitNow:
+  if(mutableData != NULL) { CFDataSetLength(mutableData, 0L); }
+  if(decoder     != NULL) { _JSONDecoderCleanup(decoder);     }
+  return(returnObject);
 }
 
 @end
@@ -1945,12 +2048,17 @@ static NSNumberInitWithUnsignedLongLongImp _jk_NSNumberInitWithUnsignedLongLongI
 
 - (id)objectFromJSONDataWithParseOptions:(JKParseOptionFlags)parseOptionFlags error:(NSError **)error
 {
-  return([[JSONDecoder decoderWithParseOptions:parseOptionFlags] parseJSONData:self error:error]);
+  JSONDecoder *decoder = NULL;
+  id returnObject = [(decoder = [JSONDecoder decoderWithParseOptions:parseOptionFlags]) parseJSONData:self error:error];
+  if(decoder != NULL) { _JSONDecoderCleanup(decoder); }
+  return(returnObject);
 }
 
 @end
 
-
+////////////
+#pragma mark -
+#pragma mark Encoding / deserializing functions
 
 static void jk_encode_error(JKEncodeState *encodeState, NSString *format, ...) {
   NSCParameterAssert((encodeState != NULL) && (format != NULL));
@@ -1975,7 +2083,7 @@ static int jk_encode_printf(JKEncodeState *encodeState, const char *format, ...)
   va_start(varArgsList, format);
   va_end(varArgsList);
 
-  if(encodeState->stringBuffer.bytes.length < encodeState->atIndex) { jk_encode_error(encodeState, @"Internal inconsistency error: atIndex > buffer length. %@ line #%ld", [NSString stringWithUTF8String:__FILE__], (long)__LINE__); return(1); }
+  if( encodeState->stringBuffer.bytes.length < encodeState->atIndex) { jk_encode_error(encodeState, @"Internal inconsistency error: atIndex > buffer length. %@ line #%ld", [NSString stringWithUTF8String:__FILE__], (long)__LINE__); return(1); }
   if((encodeState->stringBuffer.bytes.length - encodeState->atIndex) < 1024L) { if(jk_managedBuffer_resize(&encodeState->stringBuffer, encodeState->atIndex + 4096UL) == NULL) { jk_encode_error(encodeState, @"Unable to resize temporary buffer."); return(1); } }
 
   char    *atPtr     = (char *)encodeState->stringBuffer.bytes.ptr    + encodeState->atIndex;
@@ -1985,7 +2093,7 @@ static int jk_encode_printf(JKEncodeState *encodeState, const char *format, ...)
 
   while(printfAdded > remaining) {
     if(jk_managedBuffer_resize(&encodeState->stringBuffer, encodeState->stringBuffer.bytes.length + (printfAdded * 2UL) + 1024UL) == NULL) { jk_encode_error(encodeState, @"Unable to resize temporary buffer."); return(1); }
-    remaining = encodeState->stringBuffer.bytes.length - encodeState->atIndex;
+    remaining   = encodeState->stringBuffer.bytes.length - encodeState->atIndex;
     printfAdded = vsnprintf(atPtr, remaining, format, varArgsList);
   }
 
@@ -2062,11 +2170,11 @@ static int jk_encode_add_atom_to_buffer(JKEncodeState *encodeState, void *object
             if(JK_EXPECT_F(((encodeState->atIndex + (stringLength * 2UL) + 256UL) > encodeState->stringBuffer.bytes.length)) && JK_EXPECT_F((jk_managedBuffer_resize(&encodeState->stringBuffer, encodeState->atIndex + (stringLength * 2UL) + 1024UL) == NULL))) { jk_encode_error(encodeState, @"Unable to resize temporary buffer."); return(1); }
 
             encodeState->stringBuffer.bytes.ptr[encodeState->atIndex++] = '\"';
-            for(utf8Idx = 0UL; utf8String[utf8Idx] != 0; utf8Idx++) {
+            for(utf8Idx = 0UL; utf8String[utf8Idx] != 0U; utf8Idx++) {
               NSCParameterAssert(((&encodeState->stringBuffer.bytes.ptr[encodeState->atIndex]) - encodeState->stringBuffer.bytes.ptr) < (ssize_t)encodeState->stringBuffer.bytes.length);
               NSCParameterAssert(encodeState->atIndex < encodeState->stringBuffer.bytes.length);
-              if(JK_EXPECT_F(utf8String[utf8Idx] >= 0x80)) { encodeState->atIndex = startingAtIndex; goto slowUTF8Path; }
-              if(JK_EXPECT_F(utf8String[utf8Idx] <  0x20)) {
+              if(JK_EXPECT_F(utf8String[utf8Idx] >= 0x80U)) { encodeState->atIndex = startingAtIndex; goto slowUTF8Path; }
+              if(JK_EXPECT_F(utf8String[utf8Idx] <  0x20U)) {
                 switch(utf8String[utf8Idx]) {
                   case '\b': encodeState->stringBuffer.bytes.ptr[encodeState->atIndex++] = '\\'; encodeState->stringBuffer.bytes.ptr[encodeState->atIndex++] = 'b'; break;
                   case '\f': encodeState->stringBuffer.bytes.ptr[encodeState->atIndex++] = '\\'; encodeState->stringBuffer.bytes.ptr[encodeState->atIndex++] = 'f'; break;
@@ -2107,7 +2215,7 @@ static int jk_encode_add_atom_to_buffer(JKEncodeState *encodeState, void *object
             NSCParameterAssert(((&encodeState->stringBuffer.bytes.ptr[encodeState->atIndex]) - encodeState->stringBuffer.bytes.ptr) < (ssize_t)encodeState->stringBuffer.bytes.length);
             NSCParameterAssert(encodeState->atIndex < encodeState->stringBuffer.bytes.length);
             NSCParameterAssert((CFIndex)utf8Idx < usedBytes);
-            if(JK_EXPECT_F(utf8String[utf8Idx] < 0x20)) {
+            if(JK_EXPECT_F(utf8String[utf8Idx] < 0x20U)) {
               switch(utf8String[utf8Idx]) {
                 case '\b': encodeState->stringBuffer.bytes.ptr[encodeState->atIndex++] = '\\'; encodeState->stringBuffer.bytes.ptr[encodeState->atIndex++] = 'b'; break;
                 case '\f': encodeState->stringBuffer.bytes.ptr[encodeState->atIndex++] = '\\'; encodeState->stringBuffer.bytes.ptr[encodeState->atIndex++] = 'f'; break;
@@ -2117,16 +2225,16 @@ static int jk_encode_add_atom_to_buffer(JKEncodeState *encodeState, void *object
                 default: if(jk_encode_printf(encodeState, "\\u%4.4x", utf8String[utf8Idx])) { return(1); } break;
               }
             } else {
-              if(JK_EXPECT_F(utf8String[utf8Idx] >= 0x80) && (encodeState->serializeOptionFlags & JKSerializeOptionEscapeUnicode)) {
+              if(JK_EXPECT_F(utf8String[utf8Idx] >= 0x80U) && (encodeState->serializeOptionFlags & JKSerializeOptionEscapeUnicode)) {
                 const unsigned char *nextValidCharacter = NULL;
-                UTF32                u32ch              = 0UL;
+                UTF32                u32ch              = 0U;
                 ConversionResult     result;
 
                 if(JK_EXPECT_F((result = ConvertSingleCodePointInUTF8(&utf8String[utf8Idx], &utf8String[usedBytes], (UTF8 const **)&nextValidCharacter, &u32ch)) != conversionOK)) { jk_encode_error(encodeState, @"Error converting UTF8."); return(1); }
                 else {
-                  utf8Idx = (nextValidCharacter - utf8String) - 1L;
-                  if(u32ch <= 0xffff) { if(jk_encode_printf(encodeState, "\\u%4.4x", u32ch))                                                        { return(1); } }
-                  else                { if(jk_encode_printf(encodeState, "\\u%4.4x\\u%4.4x", (0xd7c0 + (u32ch >> 10)), (0xdc00 + (u32ch & 0x3ff)))) { return(1); } }
+                  utf8Idx = (nextValidCharacter - utf8String) - 1UL;
+                  if(u32ch <= 0xffffU) { if(jk_encode_printf(encodeState, "\\u%4.4x", u32ch))                                                           { return(1); } }
+                  else                 { if(jk_encode_printf(encodeState, "\\u%4.4x\\u%4.4x", (0xd7c0U + (u32ch >> 10)), (0xdc00U + (u32ch & 0x3ffU)))) { return(1); } }
                 }
               } else {
                 if((utf8String[utf8Idx] == '\"') || (utf8String[utf8Idx] == '\\')) { encodeState->stringBuffer.bytes.ptr[encodeState->atIndex++] = '\\'; }
