@@ -8,7 +8,19 @@
 *   The low surrogate in a <code>\u<i><b>high</b></i>\u<i><b>low</b></i></code> escape sequence in a JSON String was incorrectly treating `dfff` as ill-formed Unicode.  This was due to a comparison that used `>= 0xdfff` instead of `> 0xdfff` as it should have.
 *   `JKParseOptionLooseUnicode` was not properly honored when parsing some types of ill-formed Unicode in <code>\u<i><b>HHHH</b></i></code> escapes in JSON Strings.
 
-### Important Changes
+### Important Notes
+    
+*   JSONKit v1.4 now uses custom concrete subclasses of [`NSArray`][NSArray] and [`NSDictionary`][NSDictionary], `JKArray` and `JKDictionary` respectively.  These classes are internal and private to JSONKit, you should not instantiate objects from these classes directly.
+
+    In theory, these custom classes should behave exactly the same as the respective Foundation / Cocoa counterparts.
+    
+    As usual, in practice may have non-linear excursions from what theory predicts.  It is also virtually impossible to properly test or predict how these custom classes will interact with software in the wild.
+    
+    Most likely, if you do encounter a problem, it will happen very quickly, and you should report a bug via the [github.com JSONKit Issue Tracker][bugtracker].
+    
+    In addition to the required class cluster primitive methods, the two custom collection classes also include support for [`NSFastEnumeration`][NSFastEnumeration], along with methods that support the bulk retrieval of the objects contents.
+
+### Major Changes
 
 *   The `JK_ENABLE_CF_TRANSFER_OWNERSHIP_CALLBACKS` pre-processor define flag that was added to JSONKit v1.3 has been removed.
     
@@ -50,29 +62,18 @@
     
     For comparison, [json-framework][], a popular Objective-C JSON parsing library, turns in the following benchmark times for [`twitter_public_timeline.json`][twitter_public_timeline.json]&mdash;
     
-    <pre>
-         read : min: 1670.000 us, avg: 1682.461 us, char/s:  14585776.43 /  13.910 MB/s
+    <pre>     read : min: 1670.000 us, avg: 1682.461 us, char/s:  14585776.43 /  13.910 MB/s
          write: min: 1021.000 us, avg: 1028.970 us, char/s:  23849091.81 /  22.744 MB/s</pre>
     
     Since the benchmark for JSONKit and [json-framework][] was done on the same computer, it's safe to compare the timing results.  The version of [json-framework][] used was the latest v3.0 available via the master branch at the time of this writing on github.com.
     
     JSONKit v1.4 is 483% faster at reading and 694% faster at writing than [json-framework][].
 
-### Important Notes
-    
-*   JSONKit v1.4 now uses custom concrete subclasses of [`NSArray`][NSArray] and [`NSDictionary`][NSDictionary].
-
-    In theory, these custom classes should behave exactly the same as the respective Foundation / Cocoa counterparts.
-    
-    As usual, in practice may have non-linear excursions from what theory predicts.  It is also virtually impossible to properly test or predict how these custom classes will interact with software in the wild.
-    
-    Most likely, if you do encounter a problem, it will happen very quickly, and you should report a bug via the [github.com JSONKit Issue Tracker][bugtracker].
-
-
 ### Other Changes
 
 *   Added a `__clang_analyzer__` pre-processor conditional around some code that the `clang` static analyzer was giving false positives for.  However, `clang` versions &le; 1.5 do not define `__clang_analyzer__` and therefore will continue to emit analyzer warnings.
-*   The cache now uses a linear congruential generator to select which item in the cache to randomly age.  This should age items in the cache more fairly.
+*   The cache now uses a Galois Linear Feedback Shift Register PRNG to select which item in the cache to randomly age.  This should age items in the cache more fairly.
+*   To promote better L1 cache locality, the cache age structure was rearanged slightly along with modifying when an item is randomly chosen to be aged.
 *   Removed a lot of internal and private data structures from `JSONKit.h` and put them in `JSONKit.m`.
 *   Modified the way floating point values are serialized.  Previously, the [`printf`][printf] format conversion `%.16g` was used.  This was changed to `%.17g` which should theoretically allow for up to a full `float`, or [IEEE 754 Single 32-bit floating-point][Single Precision], of precision when converting floating point values to decimal representation. 
 *   The usual sundry of inconsequential tidies and what not, such as updating the README.md, etc.
@@ -83,7 +84,7 @@
 
 *   Added the `JK_ENABLE_CF_TRANSFER_OWNERSHIP_CALLBACKS` pre-processor define flag.
     
-    This is typically enabled by adding <span style="white-space: nowrap;">`-DJK_ENABLE_CF_TRANSFER_OWNERSHIP_CALLBACKS`</span> to the compilers command line arguments or in `Xcode.app` by adding `JK_ENABLE_CF_TRANSFER_OWNERSHIP_CALLBACKS` to a projects / targets `Pre-Processor Macros` settings.
+    This is typically enabled by adding `-DJK_ENABLE_CF_TRANSFER_OWNERSHIP_CALLBACKS` to the compilers command line arguments or in `Xcode.app` by adding `JK_ENABLE_CF_TRANSFER_OWNERSHIP_CALLBACKS` to a projects / targets `Pre-Processor Macros` settings.
     
     The `JK_ENABLE_CF_TRANSFER_OWNERSHIP_CALLBACKS` option enables the use of custom Core Foundation collection call backs which omit the [`CFRetain`][CFRetain] calls.  This results in saving several [`CFRetain`][CFRetain] and [`CFRelease`][CFRelease] calls typically needed for every single object from the parsed JSON.  While the author has used this technique for years without any issues, an unexpected interaction with the Foundation [`-mutableCopy`][-mutableCopy] method and Core Foundation Toll-Free Bridging resulting in a condition in which the objects contained in the collection to be over released.  This problem does not occur with the use of [`-copy`][-copy] due to the fact that the objects created by JSONKit are immutable, and therefore [`-copy`][-copy] does not require creating a completely new object and copying the contents, instead [`-copy`][-copy] simply returns a [`-retain`][-retain]'d version of the immutable object which is significantly faster along with the obvious reduction in memory usage.
     
@@ -95,7 +96,7 @@
     
     For the vast majority of users, the author believes JSONKits custom "Transfer of Ownership Collection Callbacks" will not cause any problems.  As previously stated, the author has used this technique in performance critical code for years and has never had a problem.  Until a user reported a problem with [`-mutableCopy`][-mutableCopy], the author was unaware that the use of the custom callbacks could even cause a problem.  This is probably due to the fact that the vast majority of time the typical usage pattern tends to be "iterate the contents of the collection" and very rarely mutate the returned collection directly (although this last part is likely to vary significantly from programmer to programmer).  The author tends to avoid the use of [`-mutableCopy`][-mutableCopy] as it results in a significant performance and memory consumption penalty.  The reason for this is in "typical" Cocoa coding patterns, using [`-mutableCopy`][-mutableCopy] will instantiate an identical, albeit mutable, version of the original object.  This requires both memory for the new object and time to iterate the contents of the original object and add them to the new object.  Furthermore, under "typical" Cocoa coding patterns, the original collection object continues to consume memory until the autorelease pool is released.  However, clearly there are cases where the use of [`-mutableCopy`][-mutableCopy] makes sense or may be used by an external library which is out of your direct control.
     
-    The use of the standard Core Foundation collection callbacks results in a 9% to 23% reduction in parsing performance, with an "eye-balled average" of around 13% according to some benchmarking done by the author using Real World&trade; JSON (i.e., actual JSON from various web services, such as Twitter, etc) using `gcc-4.2 -arch x86_64 -O3 -DNS_BLOCK_ASSERTIONS` with the only change being the addition of <span style="white-space: nowrap;">`-DJK_ENABLE_CF_TRANSFER_OWNERSHIP_CALLBACKS`</span>.
+    The use of the standard Core Foundation collection callbacks results in a 9% to 23% reduction in parsing performance, with an "eye-balled average" of around 13% according to some benchmarking done by the author using Real World&trade; JSON (i.e., actual JSON from various web services, such as Twitter, etc) using `gcc-4.2 -arch x86_64 -O3 -DNS_BLOCK_ASSERTIONS` with the only change being the addition of `-DJK_ENABLE_CF_TRANSFER_OWNERSHIP_CALLBACKS`.
     
     `JK_ENABLE_CF_TRANSFER_OWNERSHIP_CALLBACKS` is only applicable to parsing / deserializing (i.e. converting from) of JSON.  Serializing (i.e., converting to JSON) is completely unaffected by this change.
 
@@ -157,4 +158,5 @@ No change log information was kept for versions prior to 1.2.
 [NSArray]: http://developer.apple.com/mac/library/documentation/Cocoa/Reference/Foundation/Classes/NSArray_Class/index.html
 [NSDictionary]: http://developer.apple.com/mac/library/documentation/Cocoa/Reference/Foundation/Classes/NSDictionary_Class/index.html
 [NSData]: http://developer.apple.com/mac/library/documentation/Cocoa/Reference/Foundation/Classes/NSData_Class/index.html
+[NSFastEnumeration]: http://developer.apple.com/library/mac/documentation/Cocoa/Reference/NSFastEnumeration_protocol/Reference/NSFastEnumeration.html
 [printf]: http://developer.apple.com/library/mac/#documentation/Darwin/Reference/ManPages/man3/printf.3.html
