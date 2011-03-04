@@ -2,6 +2,65 @@
 
 ## Version 1.4 2011/28/02
 
+### New Features
+
+*   JSONKit can now return mutable collection classes.
+
+### Deprecated Methods
+
+*   The following `JSONDecoder` methods are deprecated beginning with JSONKit v1.4 and will be removed in a later release&ndash;
+    
+    <pre>
+    &#x200b;- (id)parseUTF8String:(const unsigned char *)string length:(size_t)length;
+    &#x200b;- (id)parseUTF8String:(const unsigned char *)string length:(size_t)length error:(NSError **)error;
+    &#x200b;- (id)parseJSONData:(NSData *)jsonData;
+    &#x200b;- (id)parseJSONData:(NSData *)jsonData error:(NSError **)error;
+    </pre>
+    
+    The JSONKit v1.4 <code>objectWith&hellip;</code> methods should be used instead.
+
+### NEW API's
+
+*   The following methods were added to `JSONDecoder`&ndash;
+    
+    These methods replace their deprecated <code>parse&hellip;</code> counterparts and return immutable collection objects.
+    
+    <pre>
+    &#x200b;- (id)objectWithUTF8String:(const unsigned char *)string length:(NSUInteger)length;
+    &#x200b;- (id)objectWithUTF8String:(const unsigned char *)string length:(NSUInteger)length error:(NSError **)error;
+    &#x200b;- (id)objectWithData:(NSData *)jsonData;
+    &#x200b;- (id)objectWithData:(NSData *)jsonData error:(NSError **)error;
+    </pre>
+    
+    These methods are the same as their <code>objectWith&hellip;</code> counterparts except they return mutable collection objects.
+    
+    <pre>
+    &#x200b;- (id)mutableObjectWithUTF8String:(const unsigned char *)string length:(NSUInteger)length;
+    &#x200b;- (id)mutableObjectWithUTF8String:(const unsigned char *)string length:(NSUInteger)length error:(NSError **)error;
+    &#x200b;- (id)mutableObjectWithData:(NSData *)jsonData;
+    &#x200b;- (id)mutableObjectWithData:(NSData *)jsonData error:(NSError **)error;
+    </pre>
+
+*   The following methods were added to `NSString (JSONKit)`&ndash;
+    
+    These methods are the same as their <code>objectFrom&hellip;</code> counterparts except they return mutable collection objects.
+    
+    <pre>
+    &#x200b;- (id)mutableObjectFromJSONString;
+    &#x200b;- (id)mutableObjectFromJSONStringWithParseOptions:(JKParseOptionFlags)parseOptionFlags;
+    &#x200b;- (id)mutableObjectFromJSONStringWithParseOptions:(JKParseOptionFlags)parseOptionFlags error:(NSError **)error;
+    </pre>
+
+*   The following methods were added to `NSData (JSONKit)`&ndash;
+    
+    These methods are the same as their <code>objectFrom&hellip;</code> counterparts except they return mutable collection objects.
+    
+    <pre>
+    &#x200b;- (id)mutableObjectFromJSONData;
+    &#x200b;- (id)mutableObjectFromJSONDataWithParseOptions:(JKParseOptionFlags)parseOptionFlags;
+    &#x200b;- (id)mutableObjectFromJSONDataWithParseOptions:(JKParseOptionFlags)parseOptionFlags error:(NSError **)error;
+    </pre>
+    
 ### Bug Fixes
 
 *   JSONKit has a fast and a slow path for parsing JSON Strings.  The slow path is needed whenever special string processing is required, such as the conversion of `\` escape sequences or ill-formed UTF-8.  Although the slow path had a check for characters < `0x20`, which are not permitted by the [RFC 4627][], there was a bug such that the condition was never actually checked.  As a result, JSONKit would have incorrectly accepted JSON that contained characters < `0x20` if it was using the slow path to process a JSON String.
@@ -10,7 +69,7 @@
 
 ### Important Notes
     
-*   JSONKit v1.4 now uses custom concrete subclasses of [`NSArray`][NSArray] and [`NSDictionary`][NSDictionary], `JKArray` and `JKDictionary` respectively.  These classes are internal and private to JSONKit, you should not instantiate objects from these classes directly.
+*   JSONKit v1.4 now uses custom concrete subclasses of [`NSArray`][NSArray], [`NSMutableArray`][NSMutableArray], [`NSDictionary`][NSDictionary], and [`NSMutableDictionary`][NSMutableDictionary]&mdash; `JKArray`, `JKMutableArray`, `JKDictionary`, and `JKMutableDictionary`. respectively.  These classes are internal and private to JSONKit, you should not instantiate objects from these classes directly.
 
     In theory, these custom classes should behave exactly the same as the respective Foundation / Cocoa counterparts.
     
@@ -18,7 +77,43 @@
     
     Most likely, if you do encounter a problem, it will happen very quickly, and you should report a bug via the [github.com JSONKit Issue Tracker][bugtracker].
     
-    In addition to the required class cluster primitive methods, the two custom collection classes also include support for [`NSFastEnumeration`][NSFastEnumeration], along with methods that support the bulk retrieval of the objects contents.
+    In addition to the required class cluster primitive methods, the custom collection classes also include support for [`NSFastEnumeration`][NSFastEnumeration], along with methods that support the bulk retrieval of the objects contents.
+    
+    #### Exceptions Thrown
+    
+    The JSONKit collection classes will throw the same exceptions for the same conditions as their respective Foundation counterparts.  If you find a discrepancy, please report a bug via the [github.com JSONKit Issue Tracker][bugtracker].
+    
+    #### Multithreading Safety
+    
+    The same multithreading rules and caveats for the Foundation collection classes apply to the JSONKit collection classes.  Specifically, it should be safe to use the immutable collections from multiple threads concurrently.
+    
+    The mutable collections can be used from multiple threads as long as you provide some form of mutex barrier that ensures that if a thread needs to mutate the collection, then it has exclusive access to the collection&ndash; no other thread can be reading from or writing to the collection until the mutating thread has finished.  Failure to ensure that there are no other threads reading or writing from the mutable collection when a thread mutates the collection will result in `undefined` behavior.
+    
+    #### Mutable Collection Notes
+    
+    The mutable versions of the collection classes are meant to be used when you need to make minor modifications to the collection.  Neither `JKMutableArray` or `JKMutableDictionary` have been optimized for nor are they intended to be used in situations where you are adding a large number of objects or new keys&ndash; these types of operations will cause both classes to frequently reallocate the memory used to hold the objects in the collection.
+    
+    #### `JKMutableArray` Usage Notes
+    
+    * You should minimize the number of new objects you added to the array.  The array is not designed for high performance insertion and removal of objects.  If the array does not have any extra capacity it must reallocate the backing store.  When the array is forced to grow the backing store, it currently adds an additional 16 slots worth of spare capacity.  The array is instantiated without any extra capacity on the assumption that dictionaries are going to be mutated more than arrays.  The array never shrinks the backing store.
+    
+    * Replacing objects in the array via [`-replaceObjectAtIndex:withObject:`][-replaceObjectAtIndex:withObject:] is very fast since the array simply releases the current object at the index and replaces it with the new object.
+    
+    * Inserting an object in to the array via [`-insertObject:atIndex:`][-insertObject:atIndex:] cause the array to [`memmove()`][memmove] all the objects up one slot from the insertion index.  This means this operation is fastest when inserting objects at the last index since no objects need to be moved.
+    
+    * Removing an object from the array via [`-removeObjectAtIndex:`][-removeObjectAtIndex:] causes the array to [`memmove()`][memmove] all the objects down one slot from the removal index.  This means this operation is fastest when removing objects at the last index since no objects need to be moved.  The array will not resize its backing store to a smaller size.
+    
+    * [`-copy`][-copy] and [`-mutableCopy`][-mutableCopy] will instantiate a new [`NSArray`][NSArray] or [`NSMutableArray`][NSMutableArray] class object, respectively, with the contents of the receiver.
+    
+    #### `JKMutableDictionary` Usage Notes
+    
+    * You should minimize the number of new keys you add to the dictionary.  If the number of items in the dictionary exceeds a threshold value it will trigger a resizing operation.  To do this, the dictionary must allocate a new, larger backing store, and then re-add all the items in the dictionary by rehashing them to the size of the newer, larger store.  This is an expensive operation.  While this is a limitation of nearly all hash tables, the capacity for the hash table used by `JKMutableDictionary` has been chosen to minimize the amount of memory used since it is anticipated that most dictionaries will not grow significantly once they are instantiated.
+    
+    * If the key already exists in the dictionary and you change the object associated with it via [`-setObject:forKey:`][-setObject:forKey:], this will not cause any performance problems or trigger a hash table resize.
+    
+    * Removing a key from the dictionary via [`-removeObjectForKey:`][-removeObjectForKey:] will not cause any performance problems.  However, the dictionary will not resize its backing store to the smaller size.
+    
+    * [`-copy`][-copy] and [`-mutableCopy`][-mutableCopy] will instantiate a new [`NSDictionary`][NSDictionary] or [`NSMutableDictionary`][NSMutableDictionary] class object, respectively, with the contents of the receiver.
 
 ### Major Changes
 
@@ -62,8 +157,9 @@
     
     For comparison, [json-framework][], a popular Objective-C JSON parsing library, turns in the following benchmark times for [`twitter_public_timeline.json`][twitter_public_timeline.json]&mdash;
     
-    <pre>     read : min: 1670.000 us, avg: 1682.461 us, char/s:  14585776.43 /  13.910 MB/s
-         write: min: 1021.000 us, avg: 1028.970 us, char/s:  23849091.81 /  22.744 MB/s</pre>
+    <pre>
+    &#x200b;     read : min: 1670.000 us, avg: 1682.461 us, char/s:  14585776.43 /  13.910 MB/s
+    &#x200b;     write: min: 1021.000 us, avg: 1028.970 us, char/s:  23849091.81 /  22.744 MB/s</pre>
     
     Since the benchmark for JSONKit and [json-framework][] was done on the same computer, it's safe to compare the timing results.  The version of [json-framework][] used was the latest v3.0 available via the master branch at the time of this writing on github.com.
     
@@ -73,10 +169,10 @@
 
 *   Added a `__clang_analyzer__` pre-processor conditional around some code that the `clang` static analyzer was giving false positives for.  However, `clang` versions &le; 1.5 do not define `__clang_analyzer__` and therefore will continue to emit analyzer warnings.
 *   The cache now uses a Galois Linear Feedback Shift Register PRNG to select which item in the cache to randomly age.  This should age items in the cache more fairly.
-*   To promote better L1 cache locality, the cache age structure was rearanged slightly along with modifying when an item is randomly chosen to be aged.
+*   To promote better L1 cache locality, the cache age structure was rearranged slightly along with modifying when an item is randomly chosen to be aged.
 *   Removed a lot of internal and private data structures from `JSONKit.h` and put them in `JSONKit.m`.
 *   Modified the way floating point values are serialized.  Previously, the [`printf`][printf] format conversion `%.16g` was used.  This was changed to `%.17g` which should theoretically allow for up to a full `float`, or [IEEE 754 Single 32-bit floating-point][Single Precision], of precision when converting floating point values to decimal representation. 
-*   The usual sundry of inconsequential tidies and what not, such as updating the README.md, etc.
+*   The usual sundry of inconsequential tidies and what not, such as updating the `README.md`, etc.
 
 ## Version 1.3 2011/05/02
 
@@ -156,7 +252,15 @@ No change log information was kept for versions prior to 1.2.
 [-isEqual:]: http://developer.apple.com/library/mac/documentation/Cocoa/Reference/Foundation/Protocols/NSObject_Protocol/Reference/NSObject.html#//apple_ref/occ/intfm/NSObject/isEqual:
 [-hash]: http://developer.apple.com/library/mac/documentation/Cocoa/Reference/Foundation/Protocols/NSObject_Protocol/Reference/NSObject.html#//apple_ref/occ/intfm/NSObject/hash
 [NSArray]: http://developer.apple.com/mac/library/documentation/Cocoa/Reference/Foundation/Classes/NSArray_Class/index.html
+[NSMutableArray]: http://developer.apple.com/mac/library/documentation/Cocoa/Reference/Foundation/Classes/NSMutableArray_Class/index.html
+[-insertObject:atIndex:]: http://developer.apple.com/library/mac/documentation/Cocoa/Reference/Foundation/Classes/NSMutableArray_Class/Reference/Reference.html#//apple_ref/occ/instm/NSMutableArray/insertObject:atIndex:
+[-removeObjectAtIndex:]: http://developer.apple.com/library/mac/documentation/Cocoa/Reference/Foundation/Classes/NSMutableArray_Class/Reference/Reference.html#//apple_ref/occ/instm/NSMutableArray/removeObjectAtIndex:
+[-replaceObjectAtIndex:withObject:]: http://developer.apple.com/library/mac/documentation/Cocoa/Reference/Foundation/Classes/NSMutableArray_Class/Reference/Reference.html#//apple_ref/occ/instm/NSMutableArray/replaceObjectAtIndex:withObject:
 [NSDictionary]: http://developer.apple.com/mac/library/documentation/Cocoa/Reference/Foundation/Classes/NSDictionary_Class/index.html
+[NSMutableDictionary]: http://developer.apple.com/mac/library/documentation/Cocoa/Reference/Foundation/Classes/NSMutableDictionary_Class/index.html
+[-setObject:forKey:]: http://developer.apple.com/library/mac/documentation/Cocoa/Reference/Foundation/Classes/NSMutableDictionary_Class/Reference/Reference.html#//apple_ref/occ/instm/NSMutableDictionary/setObject:forKey:
+[-removeObjectForKey:]: http://developer.apple.com/library/mac/documentation/Cocoa/Reference/Foundation/Classes/NSMutableDictionary_Class/Reference/Reference.html#//apple_ref/occ/instm/NSMutableDictionary/removeObjectForKey:
 [NSData]: http://developer.apple.com/mac/library/documentation/Cocoa/Reference/Foundation/Classes/NSData_Class/index.html
 [NSFastEnumeration]: http://developer.apple.com/library/mac/documentation/Cocoa/Reference/NSFastEnumeration_protocol/Reference/NSFastEnumeration.html
 [printf]: http://developer.apple.com/library/mac/#documentation/Darwin/Reference/ManPages/man3/printf.3.html
+[memmove]: http://developer.apple.com/library/mac/#documentation/Darwin/Reference/ManPages/man3/memmove.3.html
