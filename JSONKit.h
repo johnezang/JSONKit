@@ -114,7 +114,8 @@ enum {
   JKSerializeOptionPretty                = (1 << 0), // Not implemented yet...
   JKSerializeOptionEscapeUnicode         = (1 << 1),
   JKSerializeOptionExtendedFloatingPoint = (1 << 2),
-  JKSerializeOptionValidFlags            = (JKSerializeOptionPretty | JKSerializeOptionEscapeUnicode | JKSerializeOptionExtendedFloatingPoint),
+  JKSerializeOptionCompress              = (1 << 3),
+  JKSerializeOptionValidFlags            = (JKSerializeOptionPretty | JKSerializeOptionEscapeUnicode | JKSerializeOptionExtendedFloatingPoint | JKSerializeOptionCompress),
 };
 typedef JKFlags JKSerializeOptionFlags;
 

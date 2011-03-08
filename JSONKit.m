@@ -89,6 +89,9 @@
 #include <math.h>
 #include <limits.h>
 #include <objc/runtime.h>
+#include <libkern/OSAtomic.h>
+#include <dlfcn.h>
+#include <zlib.h>
 
 #import "JSONKit.h"
 
@@ -556,6 +559,11 @@ static id jk_encode(void *object, JKSerializeOptionFlags optionFlags, JKEncodeAs
 JK_STATIC_INLINE size_t jk_min(size_t a, size_t b);
 JK_STATIC_INLINE size_t jk_max(size_t a, size_t b);
 JK_STATIC_INLINE JKHash calculateHash(JKHash currentHash, unsigned char c);
+static void jk_NSErrorWithFormat(NSError **error, NSString *domain, NSInteger errorCode, NSString *format, ...);
+
+static int jk_zlib_init(void);
+static id jk_zlib_decompress(const unsigned char *bytes, size_t length, NSError **error);
+static id jk_zlib_compress  (const unsigned char *bytes, size_t length, NSError **error);
 
 #pragma mark -
 #pragma mark ObjC Voodoo
@@ -1155,6 +1163,21 @@ JK_STATIC_INLINE size_t jk_max(size_t a, size_t b) { return((a > b) ? a : b); }
 
 JK_STATIC_INLINE JKHash calculateHash(JKHash currentHash, unsigned char c) { return(((currentHash << 5) + currentHash) + c); }
 
+static void jk_NSErrorWithFormat(NSError **error, NSString *domain, NSInteger errorCode, NSString *format, ...) {
+  NSCParameterAssert((domain != NULL) && (format != NULL));
+  if(error == NULL) { return; }
+  
+  va_list varArgsList;
+  va_start(varArgsList, format);
+  NSString *formatString = [[[NSString alloc] initWithFormat:format arguments:varArgsList] autorelease];
+  va_end(varArgsList);
+  
+  *error = [NSError errorWithDomain:domain code:errorCode userInfo:
+                      [NSDictionary dictionaryWithObjectsAndKeys:
+                                                                 formatString, NSLocalizedDescriptionKey,
+                                                                 NULL]];
+}
+
 static void jk_error(JKParseState *parseState, NSString *format, ...) {
   NSCParameterAssert((parseState != NULL) && (format != NULL));
 
@@ -1187,6 +1210,158 @@ static void jk_error(JKParseState *parseState, NSString *format, ...) {
                                                  //carretString, @"JKErrorLine1Key",
                                                                               NULL]];
   }
+}
+
+#pragma mark -
+#pragma mark Compression - zlib interface
+
+static volatile OSSpinLock  _jk_zlib_spinlock   = OS_SPINLOCK_INIT;
+static NSInteger            _jk_zlib_initalized = 0L; // -1 == unrecoverable linking error (can't use zlib), 0 = uninitialized, 1 = good to go.
+static void                *_jk_dlhandle        = NULL;
+
+// These are function pointer trampolines that are placeholders for their respective zlib functions.
+// Think of it as a form of weak linking.  Or "You don't have to link to libz in Xcode, we'll do it for you on the fly!"
+//
+// NOTE: The zlib.h header defines the ...Init* functions as a pre-processor macro that automatically passes the zlib.h ZLIB_VERSION
+//       and sizeof(z_stream) as arguments.  We must emulate this behavior.
+//
+// IMPORTANT: The behavior is undefined if any of these trampolines are used when _jk_zlib_initalized != 1.
+//
+static int   (*jk_deflateInit2_) (z_streamp strm, int  level, int  method, int windowBits, int memLevel, int strategy, const char *version, int stream_size); // NOTE: version == ZLIB_VERSIOn, stream_size == sizeof(z_stream)
+static uLong (*jk_deflateBound)  (z_streamp strm, uLong sourceLen);
+static int   (*jk_deflate)       (z_streamp strm, int flush);
+static int   (*jk_deflateEnd)    (z_streamp strm);
+static int   (*jk_inflateInit2_) (z_streamp strm, int  windowBits, const char *version, int stream_size); // NOTE: version == ZLIB_VERSIOn, stream_size == sizeof(z_stream)
+static int   (*jk_inflate)       (z_streamp strm, int flush);
+static int   (*jk_inflateEnd)    (z_streamp strm);
+
+// Binds the the zlib function pointer trampolines to their dynamic library addresses.
+static int jk_zlib_init(void) {
+  if(_jk_zlib_initalized == 0L) {
+    OSSpinLockLock(&_jk_zlib_spinlock);
+    if(_jk_zlib_initalized != 0L) { goto exitUnlock; } // Someone changed _jk_zlib_initalized between our first test and now, when we have the lock.
+    
+    _jk_dlhandle = dlopen("libz.dylib", RTLD_LAZY);
+    
+    if((jk_deflateInit2_ = (int  (*)(z_streamp strm, int  level, int  method, int windowBits, int memLevel, int strategy, const char *version, int stream_size)) dlsym(_jk_dlhandle, "deflateInit2_")) == NULL) { _jk_zlib_initalized = -1L; goto exitUnlock; }
+    if((jk_deflateBound  = (uLong(*)(z_streamp strm, uLong sourceLen))                                                                                           dlsym(_jk_dlhandle, "deflateBound"))  == NULL) { _jk_zlib_initalized = -1L; goto exitUnlock; }
+    if((jk_deflate       = (int  (*)(z_streamp strm, int flush))                                                                                                 dlsym(_jk_dlhandle, "deflate"))       == NULL) { _jk_zlib_initalized = -1L; goto exitUnlock; }
+    if((jk_deflateEnd    = (int  (*)(z_streamp strm))                                                                                                            dlsym(_jk_dlhandle, "deflateEnd"))    == NULL) { _jk_zlib_initalized = -1L; goto exitUnlock; }
+    
+    if((jk_inflateInit2_ = (int  (*)(z_streamp strm, int  windowBits, const char *version, int stream_size))                                                     dlsym(_jk_dlhandle, "inflateInit2_")) == NULL) { _jk_zlib_initalized = -1L; goto exitUnlock; }
+    if((jk_inflate       = (int  (*)(z_streamp strm, int flush))                                                                                                 dlsym(_jk_dlhandle, "inflate"))       == NULL) { _jk_zlib_initalized = -1L; goto exitUnlock; }
+    if((jk_inflateEnd    = (int  (*)(z_streamp strm))                                                                                                            dlsym(_jk_dlhandle, "inflateEnd"))    == NULL) { _jk_zlib_initalized = -1L; goto exitUnlock; }
+    
+    _jk_zlib_initalized = 1L;
+    
+  exitUnlock:
+    if((_jk_zlib_initalized == -1L) && (_jk_dlhandle != NULL)) { dlclose(_jk_dlhandle); _jk_dlhandle = NULL; }
+    OSSpinLockUnlock(&_jk_zlib_spinlock);
+  }
+  
+  return(_jk_zlib_initalized);
+}
+
+
+static id jk_zlib_compress(const unsigned char *bytes, size_t length, NSError **error) {
+  NSCParameterAssert((bytes != NULL));
+  
+  if((_jk_zlib_initalized <= 0L) && (jk_zlib_init() == -1L)) { jk_NSErrorWithFormat(error, @"JKErrorDomain", -1L, @"Unable to compress:  Error linking to the zlib dynamic library."); return(NULL); }
+  
+  z_stream zlibStream;
+  memset(&zlibStream, 0, sizeof(z_stream));
+  
+  zlibStream.zalloc   = Z_NULL;
+  zlibStream.zfree    = Z_NULL;
+  zlibStream.avail_in = length;
+  zlibStream.next_in  = (Bytef *)bytes;
+  
+  int zlibResult = 0;
+  if((zlibResult = jk_deflateInit2_(&zlibStream, 1, Z_DEFLATED, (15 + 16), 8, Z_DEFAULT_STRATEGY, ZLIB_VERSION, (int)sizeof(z_stream))) != Z_OK) { jk_NSErrorWithFormat(error, @"JKErrorDomain", zlibResult, @"Error initializing zlib deflate.%s%s", (zlibStream.msg == NULL) ? "": "  zlib error message: ", (zlibStream.msg == NULL) ? "" : zlibStream.msg); return(NULL); }
+  
+  uLong compressedUpperBound = jk_deflateBound(&zlibStream, length) + 1024UL;
+  
+  NSMutableData *mutableData = NULL;
+  if(((mutableData = [NSMutableData dataWithLength:compressedUpperBound]) == NULL) || ([mutableData mutableBytes] == NULL)) { jk_NSErrorWithFormat(error, @"JKErrorDomain", zlibResult, @"Unable to allocate buffer."); goto errorExit; }
+  
+  zlibStream.avail_out = [mutableData length];
+  zlibStream.next_out  = (Bytef *)[mutableData mutableBytes];
+  
+  while((zlibResult = jk_deflate(&zlibStream, Z_FINISH)) != Z_STREAM_END) {
+    switch(zlibResult) {
+      case Z_OK:
+        compressedUpperBound = jk_deflateBound(&zlibStream, zlibStream.total_out) + 8192UL;
+        NSCParameterAssert(compressedUpperBound > [mutableData length]);
+        [mutableData setLength:compressedUpperBound];
+        if([mutableData mutableBytes] == NULL) { jk_NSErrorWithFormat(error, @"JKErrorDomain", -1L, @"Unable to resize buffer."); goto errorExit; }
+        zlibStream.avail_out =          [mutableData length]        - zlibStream.total_out;
+        zlibStream.next_out  = ((Byte *)[mutableData mutableBytes]) + zlibStream.total_out;
+        break;
+        
+      default:                                            jk_NSErrorWithFormat(error, @"JKErrorDomain", zlibResult, @"Error deflating buffer.%s%s", (zlibStream.msg == NULL) ? "": "  zlib error message: ", (zlibStream.msg == NULL) ? "" : zlibStream.msg); goto errorExit; break;
+    }
+  }
+  
+  if((zlibResult = jk_deflateEnd(&zlibStream)) != Z_OK) { jk_NSErrorWithFormat(error, @"JKErrorDomain", zlibResult, @"Error deflating buffer.%s%s", (zlibStream.msg == NULL) ? "": "  zlib error message: ", (zlibStream.msg == NULL) ? "" : zlibStream.msg); goto errorExit; }
+  
+  [mutableData setLength:zlibStream.total_out];
+  
+  return(mutableData);
+  
+errorExit:
+  if(mutableData != NULL) { [mutableData setLength:0UL]; }
+  jk_deflateEnd(&zlibStream);
+  return(NULL);
+}
+
+static id jk_zlib_decompress(const unsigned char *bytes, size_t length, NSError **error) {
+  NSCParameterAssert((bytes != NULL));
+  
+  if((_jk_zlib_initalized <= 0L) && (jk_zlib_init() == -1L)) { jk_NSErrorWithFormat(error, @"JKErrorDomain", -1L, @"Unable to decompress:  Error linking to the zlib dynamic library."); return(NULL); }
+  
+  z_stream zlibStream;
+  memset(&zlibStream, 0, sizeof(z_stream));
+  
+  size_t decompressedLength = 0UL;
+  if((length > 6UL) && (bytes[0] == 0x1f) && (bytes[1] == 0x8b)) { decompressedLength = ((bytes[(length - 1UL) - 0UL] << 24) | (bytes[(length - 1UL) - 1UL] << 16) | (bytes[(length - 1UL) - 2UL] << 8) | (bytes[(length - 1UL) - 3UL] << 0)); }
+  else                                                           { jk_NSErrorWithFormat(error, @"JKErrorDomain", -1L, @"NSData does not appear to compressed with gzip."); return(NULL); }
+  
+  NSMutableData *mutableData = NULL;
+  if(((mutableData = [NSMutableData dataWithLength:decompressedLength]) == NULL) || ([mutableData mutableBytes] == NULL)) { jk_NSErrorWithFormat(error, @"JKErrorDomain", -1L, @"Unable to allocate buffer."); return(NULL); }
+  
+  zlibStream.zalloc    = Z_NULL;
+  zlibStream.zfree     = Z_NULL;
+  zlibStream.avail_in  = length;
+  zlibStream.next_in   = (Bytef *)bytes;
+  zlibStream.avail_out = [mutableData length];
+  zlibStream.next_out  = (Bytef *)[mutableData mutableBytes];
+  
+  int zlibResult = 0;
+  if((zlibResult = jk_inflateInit2_(&zlibStream, (15 + 32), ZLIB_VERSION, (int)sizeof(z_stream))) != Z_OK) { jk_NSErrorWithFormat(error, @"JKErrorDomain", zlibResult, @"Error initializing zlib inflate.%s%s", (zlibStream.msg == NULL) ? "": "  zlib error message: ", (zlibStream.msg == NULL) ? "" : zlibStream.msg); goto errorExit; }
+  
+  while((zlibResult = jk_inflate(&zlibStream, Z_FINISH)) != Z_STREAM_END) {
+    switch(zlibResult) {
+      case Z_OK:
+        [mutableData setLength:([mutableData length] / 4UL)];
+        if([mutableData mutableBytes] == NULL) { jk_NSErrorWithFormat(error, @"JKErrorDomain", -1L, @"Unable to resize buffer."); goto errorExit; }
+        zlibStream.avail_out =          [mutableData length]        - zlibStream.total_out;
+        zlibStream.next_out  = ((Byte *)[mutableData mutableBytes]) + zlibStream.total_out;
+        break;
+        
+      default:                                            jk_NSErrorWithFormat(error, @"JKErrorDomain", zlibResult, @"Error inflating buffer.%s%s", (zlibStream.msg == NULL) ? "": "  zlib error message: ", (zlibStream.msg == NULL) ? "" : zlibStream.msg); goto errorExit; break;
+    }
+  }
+  
+  if((zlibResult = jk_inflateEnd(&zlibStream)) != Z_OK) { jk_NSErrorWithFormat(error, @"JKErrorDomain", zlibResult, @"Error inflating buffer.%s%s", (zlibStream.msg == NULL) ? "": "  zlib error message: ", (zlibStream.msg == NULL) ? "" : zlibStream.msg); goto errorExit; }
+  
+  [mutableData setLength:zlibStream.total_out];
+  
+  return(mutableData);
+  
+errorExit:
+  if(mutableData != NULL) { [mutableData setLength:0UL]; }
+  jk_inflateEnd(&zlibStream);
+  return(NULL);
 }
 
 #pragma mark -
@@ -1689,13 +1864,13 @@ static int jk_parse_number(JKParseState *parseState) {
       case JSONNumberStateFractionalNumberStart:
       case JSONNumberStateExponentPlusMinus:if(!(((currentChar >= '0') && (currentChar <= '9')) ||
                                                  (isHexFloatingPoint && ((lowerCaseCC >= 'a') && (lowerCaseCC <= 'f')))))                          { numberState = JSONNumberStateError;                                      break; }
-                                       else {                                              if(numberState == JSONNumberStateFractionalNumberStart) { numberState = JSONNumberStateFractionalNumber; }
-                                                                                           else                                                    { numberState = JSONNumberStateExponent;         }                         break; }
+                                       else {                                     if(numberState == JSONNumberStateFractionalNumberStart)          { numberState = JSONNumberStateFractionalNumber; }
+                                                                                  else                                                             { numberState = JSONNumberStateExponent;         }                         break; }
       case JSONNumberStateWholeNumberZero:  if(((parseState->parseOptionFlags & JKParseOptionExtendedFloatingPoint) != 0) && (lowerCaseCC == 'x')) { numberState = JSONNumberStateWholeNumber;           isFloatingPoint = 1; isHexFloatingPoint = 1; break; }
-      case JSONNumberStateWholeNumber:      if   ( currentChar         == '.')                                                                     { numberState = JSONNumberStateFractionalNumberStart; isFloatingPoint = 1; break; }
+      case JSONNumberStateWholeNumber:      if   ( currentChar == '.')                                                                             { numberState = JSONNumberStateFractionalNumberStart; isFloatingPoint = 1; break; }
       case JSONNumberStateFractionalNumber: if(  (!isHexFloatingPoint && (lowerCaseCC == 'e')) ||
                                                  ( isHexFloatingPoint && (lowerCaseCC == 'p')))                                                    { numberState = JSONNumberStateExponentStart;         isFloatingPoint = 1; isHexFloatingPoint = 2; break; }
-      case JSONNumberStateExponent:         if(!((                       ( currentChar         >= '0') && ( currentChar         <= '9') )  ||
+      case JSONNumberStateExponent:         if(!((                       (currentChar >= '0') && (currentChar <= '9') )  ||
                                                  (isHexFloatingPoint && ((lowerCaseCC >= 'a') && (lowerCaseCC <= 'f')))) || 
                                                 (numberState == JSONNumberStateWholeNumberZero))                                                   { numberState = JSONNumberStateFinished;              backup          = 1; break; }
         break;
@@ -1725,7 +1900,7 @@ static int jk_parse_number(JKParseState *parseState) {
     if(JK_EXPECT_F(parseState->token.tokenPtrRange.length == 2UL) && JK_EXPECT_F(numberTempBuf[1] == '0') && JK_EXPECT_F(isNegative)) { isFloatingPoint = 1; }
 
     if(isFloatingPoint) {
-      parseState->token.value.number.doubleValue = strtod((const char *)numberTempBuf, (char **)&endOfNumber);
+      parseState->token.value.number.doubleValue = strtod((const char *)numberTempBuf, (char **)&endOfNumber); // strtod is documented to return U+2261 (identical to) 0.0 on an underflow error (along with setting errno to ERANGE).
       parseState->token.value.type               = JKValueTypeDouble;
       parseState->token.value.ptrRange.ptr       = (const unsigned char *)&parseState->token.value.number.doubleValue;
       parseState->token.value.ptrRange.length    = sizeof(double);
@@ -1750,10 +1925,10 @@ static int jk_parse_number(JKParseState *parseState) {
       numberState = JSONNumberStateError;
       if(errno == ERANGE) {
         switch(parseState->token.value.type) {
-          case JKValueTypeDouble:           jk_error(parseState, @"The value '%s' could not be represented as a 'double' due to %s.",           numberTempBuf, (parseState->token.value.number.doubleValue == 0.0) ? "underflow" : "overflow"); break;
-          case JKValueTypeLongLong:         jk_error(parseState, @"The value '%s' exceeded the minimum value that could be represented: %lld.", numberTempBuf, parseState->token.value.number.longLongValue); break;
-          case JKValueTypeUnsignedLongLong: jk_error(parseState, @"The value '%s' exceeded the maximum value that could be represented: %llu.", numberTempBuf, parseState->token.value.number.unsignedLongLongValue); break;
-          default:                          jk_error(parseState, @"Internal error: Unknown token value type. %@ line #%ld", [NSString stringWithUTF8String:__FILE__], (long)__LINE__); break;
+          case JKValueTypeDouble:           jk_error(parseState, @"The value '%s' could not be represented as a 'double' due to %s.",           numberTempBuf, (parseState->token.value.number.doubleValue == 0.0) ? "underflow" : "overflow"); break; // see above for == 0.0.
+          case JKValueTypeLongLong:         jk_error(parseState, @"The value '%s' exceeded the minimum value that could be represented: %lld.", numberTempBuf, parseState->token.value.number.longLongValue);                                   break;
+          case JKValueTypeUnsignedLongLong: jk_error(parseState, @"The value '%s' exceeded the maximum value that could be represented: %llu.", numberTempBuf, parseState->token.value.number.unsignedLongLongValue);                           break;
+          default:                          jk_error(parseState, @"Internal error: Unknown token value type. %@ line #%ld",                     [NSString stringWithUTF8String:__FILE__], (long)__LINE__);                                      break;
         }
       }
     }
@@ -1952,12 +2127,8 @@ static void *jk_parse_dictionary(JKParseState *parseState) {
           if(JK_EXPECT_F((key = jk_object_for_token(parseState)) == NULL)) {                              jk_error(parseState, @"Internal error: Key == NULL."); stopParsing = 1; break; }
           else {
             parseState->objectStack.keys[objectStackIndex] = key;
-            if(JK_EXPECT_T(parseState->token.value.cacheItem != NULL)) {
-              if((parseState->token.value.cacheItem->cfHash == 0UL)) { parseState->token.value.cacheItem->cfHash = CFHash(key); }
-              parseState->objectStack.cfHashes[objectStackIndex] = parseState->token.value.cacheItem->cfHash;
-            } else {
-              parseState->objectStack.cfHashes[objectStackIndex] = CFHash(key);
-            }
+            if(JK_EXPECT_T(parseState->token.value.cacheItem != NULL)) { if(JK_EXPECT_F(parseState->token.value.cacheItem->cfHash == 0UL)) { parseState->token.value.cacheItem->cfHash = CFHash(key); } parseState->objectStack.cfHashes[objectStackIndex] = parseState->token.value.cacheItem->cfHash; }
+            else { parseState->objectStack.cfHashes[objectStackIndex] = CFHash(key); }
           }
           break;
 
@@ -2236,8 +2407,20 @@ static void _JSONDecoderCleanup(JSONDecoder *decoder) {
 // This needs to be completely rewritten.
 static id _JKParseUTF8String(JKParseState *parseState, BOOL mutableCollections, const unsigned char *string, size_t length, NSError **error) {
   NSCParameterAssert((parseState != NULL) && (string != NULL) && (parseState->cache.prng_lfsr != 0U));
-  parseState->stringBuffer.bytes.ptr    = string;
-  parseState->stringBuffer.bytes.length = length;
+
+  NSMutableData *decompressedData = NULL;
+  const unsigned char *useString = string;
+  size_t               useLength = length;
+
+  if((length > 6UL) && (string[0] == 0x1fU) && (string[1] == 0x8bU)) {
+    if((decompressedData = jk_zlib_decompress(string, length, error)) == NULL) { return(NULL); }
+    useLength = [decompressedData length];
+    useString = [decompressedData bytes];
+  }
+  
+
+  parseState->stringBuffer.bytes.ptr    = useString;
+  parseState->stringBuffer.bytes.length = useLength;
   parseState->atIndex                   = 0UL;
   parseState->lineNumber                = 1UL;
   parseState->lineStartIndex            = 0UL;
@@ -2262,6 +2445,7 @@ static id _JKParseUTF8String(JKParseState *parseState, BOOL mutableCollections, 
   
   jk_managedBuffer_release(&parseState->token.tokenBuffer);
   jk_objectStack_release(&parseState->objectStack);
+  if(decompressedData != NULL) { [decompressedData setLength:0UL]; }
   
   parseState->stringBuffer.bytes.ptr    = NULL;
   parseState->stringBuffer.bytes.length = 0UL;
@@ -2329,7 +2513,7 @@ static id _JKParseUTF8String(JKParseState *parseState, BOOL mutableCollections, 
 
 - (id)objectWithData:(NSData *)jsonData error:(NSError **)error
 {
-  if(jsonData == NULL) { [NSException raise:NSInvalidArgumentException format:@"The jsonData argument is NULL."]; } 
+  if(jsonData == NULL) { [NSException raise:NSInvalidArgumentException format:@"The jsonData argument is NULL."]; }
   return([self objectWithUTF8String:(const unsigned char *)[jsonData bytes] length:[jsonData length] error:error]);
 }
 
@@ -2354,7 +2538,7 @@ static id _JKParseUTF8String(JKParseState *parseState, BOOL mutableCollections, 
 
 - (id)mutableObjectWithData:(NSData *)jsonData error:(NSError **)error
 {
-  if(jsonData == NULL) { [NSException raise:NSInvalidArgumentException format:@"The jsonData argument is NULL."]; } 
+  if(jsonData == NULL) { [NSException raise:NSInvalidArgumentException format:@"The jsonData argument is NULL."]; }
   return([self mutableObjectWithUTF8String:(const unsigned char *)[jsonData bytes] length:[jsonData length] error:error]);
 }
 
@@ -2589,7 +2773,7 @@ JK_STATIC_INLINE void jk_encode_updateCache(JKEncodeState *encodeState, JKEncode
   if(JK_EXPECT_T(cacheSlot != NULL)) {
     cacheSlot->object = object;
     cacheSlot->offset = startingAtIndex;
-    cacheSlot->length = (size_t)(encodeState->atIndex - startingAtIndex);  
+    cacheSlot->length = (size_t)(encodeState->atIndex - startingAtIndex);
   }
 }
 
@@ -2606,6 +2790,7 @@ static int jk_encode_add_atom_to_buffer(JKEncodeState *encodeState, void *object
 
   if(JK_EXPECT_T(cacheSlot->object == object)) {
     if(JK_EXPECT_F(((encodeState->atIndex + cacheSlot->length + 256UL) > encodeState->stringBuffer.bytes.length)) && JK_EXPECT_F((jk_managedBuffer_resize(&encodeState->stringBuffer, encodeState->atIndex + cacheSlot->length + 1024UL) == NULL))) { jk_encode_error(encodeState, @"Unable to resize temporary buffer."); return(1); }
+    NSCParameterAssert((cacheSlot->object != NULL) && (cacheSlot->offset < encodeState->stringBuffer.bytes.length) && ((cacheSlot->offset + cacheSlot->length) < encodeState->stringBuffer.bytes.length) && ((encodeState->atIndex + cacheSlot->length) < encodeState->stringBuffer.bytes.length));
     memcpy(encodeState->stringBuffer.bytes.ptr + encodeState->atIndex, encodeState->stringBuffer.bytes.ptr + cacheSlot->offset, cacheSlot->length);
     encodeState->atIndex += cacheSlot->length;
     return(0);
@@ -2631,8 +2816,8 @@ static int jk_encode_add_atom_to_buffer(JKEncodeState *encodeState, void *object
         {
           const unsigned char *cStringPtr = (const unsigned char *)CFStringGetCStringPtr((CFStringRef)object, kCFStringEncodingMacRoman);
           if(cStringPtr != NULL) {
-            size_t               utf8Idx = 0UL;
             const unsigned char *utf8String = cStringPtr;
+            size_t               utf8Idx    = 0UL;
 
             CFIndex stringLength = CFStringGetLength((CFStringRef)object);
             if(JK_EXPECT_F(((encodeState->atIndex + (stringLength * 2UL) + 256UL) > encodeState->stringBuffer.bytes.length)) && JK_EXPECT_F((jk_managedBuffer_resize(&encodeState->stringBuffer, encodeState->atIndex + (stringLength * 2UL) + 1024UL) == NULL))) { jk_encode_error(encodeState, @"Unable to resize temporary buffer."); return(1); }
@@ -2734,7 +2919,7 @@ static int jk_encode_add_atom_to_buffer(JKEncodeState *encodeState, void *object
           case 'c': case 'i': case 's': case 'l': case 'q': 
             if(JK_EXPECT_T(CFNumberGetValue((CFNumberRef)object, kCFNumberLongLongType, &llv)))  {
               if(llv < 0LL)  { llv = -llv; isNegative = 1; }
-              if(JK_EXPECT_F(llv < 10LL)) { *--aptr = llv + '0';        } else { while(JK_EXPECT_T(llv > 0LL)) { *--aptr = (llv % 10LL) + '0'; llv /= 10LL; NSCParameterAssert(aptr > anum); } }
+              if(JK_EXPECT_F(llv  < 10LL))  { *--aptr = llv  + '0'; } else { while(JK_EXPECT_T(llv  > 0LL))  { *--aptr = (llv  % 10LL)  + '0'; llv  /= 10LL;  NSCParameterAssert(aptr > anum); } }
               if(isNegative) { *--aptr = '-';              }
               NSCParameterAssert(aptr > anum);
               return(jk_encode_writen(encodeState, cacheSlot, startingAtIndex, object, aptr, &anum[255] - aptr));
@@ -2752,7 +2937,7 @@ static int jk_encode_add_atom_to_buffer(JKEncodeState *encodeState, void *object
               double dv;
               if(JK_EXPECT_T(CFNumberGetValue((CFNumberRef)object, kCFNumberDoubleType, &dv))) {
                 if(JK_EXPECT_F(!isfinite(dv))) { jk_encode_error(encodeState, @"Floating point values must be finite.  JSON does not support NaN or Infinity."); return(1); }
-                return(jk_encode_printf(encodeState, ((encodeState->serializeOptionFlags & JKSerializeOptionExtendedFloatingPoint) == 0) ? ".17g" : "%a", dv));
+                return(jk_encode_printf(encodeState, cacheSlot, startingAtIndex, object, ((encodeState->serializeOptionFlags & JKSerializeOptionExtendedFloatingPoint) == 0) ? ".17g" : "%a", dv));
               } else { jk_encode_error(encodeState, @"Unable to get floating point value from number object."); return(1); }
             }
             break;
@@ -2765,15 +2950,15 @@ static int jk_encode_add_atom_to_buffer(JKEncodeState *encodeState, void *object
       {
         int     printComma = 0;
         CFIndex arrayCount = CFArrayGetCount((CFArrayRef)object), idx = 0L;
-        if(jk_encode_write1(encodeState, NULL, 0UL, NULL, "[")) { return(1); }
+        if(JK_EXPECT_F(jk_encode_write1(encodeState, NULL, 0UL, NULL, "["))) { return(1); }
         if(arrayCount > 1020L) {
-          for(id arrayObject in object) { if(printComma) { if(jk_encode_write1(encodeState, NULL, 0UL, NULL, ",")) { return(1); } } printComma = 1; if(jk_encode_add_atom_to_buffer(encodeState, arrayObject)) { return(1); } }
+          for(id arrayObject in object)          { if(JK_EXPECT_T(printComma)) { if(JK_EXPECT_F(jk_encode_write1(encodeState, NULL, 0UL, NULL, ","))) { return(1); } } printComma = 1; if(JK_EXPECT_F(jk_encode_add_atom_to_buffer(encodeState, arrayObject)))  { return(1); } }
         } else {
           void *objects[1024];
           CFArrayGetValues((CFArrayRef)object, CFRangeMake(0L, arrayCount), (const void **)objects);
-          for(idx = 0L; idx < arrayCount; idx++) { if(printComma) { if(jk_encode_write1(encodeState, NULL, 0UL, NULL, ",")) { return(1); } } printComma = 1; if(jk_encode_add_atom_to_buffer(encodeState, objects[idx])) { return(1); } }
+          for(idx = 0L; idx < arrayCount; idx++) { if(JK_EXPECT_T(printComma)) { if(JK_EXPECT_F(jk_encode_write1(encodeState, NULL, 0UL, NULL, ","))) { return(1); } } printComma = 1; if(JK_EXPECT_F(jk_encode_add_atom_to_buffer(encodeState, objects[idx]))) { return(1); } }
         }
-        if(jk_encode_write1(encodeState, NULL, 0UL, NULL, "]")) { return(1); }
+        return(jk_encode_write1(encodeState, NULL, 0UL, NULL, "]"));
       }
       break;
 
@@ -2785,26 +2970,26 @@ static int jk_encode_add_atom_to_buffer(JKEncodeState *encodeState, void *object
         if(JK_EXPECT_F(jk_encode_write1(encodeState, NULL, 0UL, NULL, "{"))) { return(1); }
         if(JK_EXPECT_F(dictionaryCount > 1020L)) {
           for(id keyObject in object) {
-            if(printComma) { if(JK_EXPECT_F(jk_encode_write1(encodeState, NULL, 0UL, NULL, ","))) { return(1); } }
+            if(JK_EXPECT_T(printComma)) { if(JK_EXPECT_F(jk_encode_write1(encodeState, NULL, 0UL, NULL, ","))) { return(1); } }
             printComma = 1;
-            if(JK_EXPECT_F((keyObject->isa != encodeState->fastClassLookup.stringClass)) && JK_EXPECT_F(([keyObject isKindOfClass:[NSString class]] == NO))) { jk_encode_error(encodeState, @"Key must be a string object."); return(1); }
+            if(JK_EXPECT_F((keyObject->isa      != encodeState->fastClassLookup.stringClass)) && JK_EXPECT_F(([keyObject isKindOfClass:[NSString class]] == NO))) { jk_encode_error(encodeState, @"Key must be a string object."); return(1); }
             if(JK_EXPECT_F(jk_encode_add_atom_to_buffer(encodeState, keyObject)))                                                        { return(1); }
-            if(JK_EXPECT_F(jk_encode_write1(encodeState, NULL, 0UL, NULL, ":")))                                                                          { return(1); }
+            if(JK_EXPECT_F(jk_encode_write1(encodeState, NULL, 0UL, NULL, ":")))                                                         { return(1); }
             if(JK_EXPECT_F(jk_encode_add_atom_to_buffer(encodeState, (void *)CFDictionaryGetValue((CFDictionaryRef)object, keyObject)))) { return(1); }
           }
         } else {
           void *keys[1024], *objects[1024];
           CFDictionaryGetKeysAndValues((CFDictionaryRef)object, (const void **)keys, (const void **)objects);
           for(idx = 0L; idx < dictionaryCount; idx++) {
-            if(JK_EXPECT_F(printComma)) { if(JK_EXPECT_F(jk_encode_write1(encodeState, NULL, 0UL, NULL, ","))) { return(1); } }
+            if(JK_EXPECT_T(printComma)) { if(JK_EXPECT_F(jk_encode_write1(encodeState, NULL, 0UL, NULL, ","))) { return(1); } }
             printComma = 1;
             if(JK_EXPECT_F(((id)keys[idx])->isa != encodeState->fastClassLookup.stringClass) && JK_EXPECT_F([(id)keys[idx] isKindOfClass:[NSString class]] == NO)) { jk_encode_error(encodeState, @"Key must be a string object."); return(1); }
             if(JK_EXPECT_F(jk_encode_add_atom_to_buffer(encodeState, keys[idx])))    { return(1); }
-            if(JK_EXPECT_F(jk_encode_write1(encodeState, NULL, 0UL, NULL, ":")))                      { return(1); }
+            if(JK_EXPECT_F(jk_encode_write1(encodeState, NULL, 0UL, NULL, ":")))     { return(1); }
             if(JK_EXPECT_F(jk_encode_add_atom_to_buffer(encodeState, objects[idx]))) { return(1); }
           }
         }
-        if(JK_EXPECT_F(jk_encode_write1(encodeState, NULL, 0UL, NULL, "}"))) { return(1); }
+        return(jk_encode_write1(encodeState, NULL, 0UL, NULL, "}"));
       }
       break;
 
@@ -2841,16 +3026,20 @@ static id jk_encode(void *object, JKSerializeOptionFlags optionFlags, JKEncodeAs
     switch(encodeAs) {
       case JKEncodeAsData: {
         NSData *jsonData = NULL;
-        if((encodeState.stringBuffer.flags & JKManagedBufferMustFree) == 0) {
-          if((jsonData = [(NSData *)CFDataCreate(NULL, encodeState.stringBuffer.bytes.ptr, encodeState.atIndex) autorelease]) == NULL) { jk_encode_error(&encodeState, @"Unable to create NSData object"); }
+        if((encodeState.serializeOptionFlags & JKSerializeOptionCompress) != 0UL) {
+          if((jsonData = jk_zlib_compress(encodeState.stringBuffer.bytes.ptr, encodeState.atIndex, error)) == NULL) { jk_encode_error(&encodeState, @"Unable to create compressed NSData object"); }
         } else {
-          if((encodeState.stringBuffer.bytes.ptr = (unsigned char *)reallocf(encodeState.stringBuffer.bytes.ptr, encodeState.atIndex)) != NULL) {
-            if((jsonData = [(NSData *)CFDataCreateWithBytesNoCopy(NULL, encodeState.stringBuffer.bytes.ptr, encodeState.atIndex, NULL) autorelease]) == NULL) { jk_encode_error(&encodeState, @"Unable to create NSData object"); }
-          }
-          if((jsonData != NULL) || (encodeState.stringBuffer.bytes.ptr == NULL)) {
-            encodeState.stringBuffer.flags        &= ~JKManagedBufferMustFree;
-            encodeState.stringBuffer.bytes.ptr     = NULL;
-            encodeState.stringBuffer.bytes.length  = 0UL;
+          if((encodeState.stringBuffer.flags & JKManagedBufferMustFree) == 0) {
+            if((jsonData = [(NSData *)CFDataCreate(NULL, encodeState.stringBuffer.bytes.ptr, encodeState.atIndex) autorelease]) == NULL) { jk_encode_error(&encodeState, @"Unable to create NSData object"); }
+          } else {
+            if((encodeState.stringBuffer.bytes.ptr = (unsigned char *)reallocf(encodeState.stringBuffer.bytes.ptr, encodeState.atIndex)) != NULL) {
+              if((jsonData = [(NSData *)CFDataCreateWithBytesNoCopy(NULL, encodeState.stringBuffer.bytes.ptr, encodeState.atIndex, NULL) autorelease]) == NULL) { jk_encode_error(&encodeState, @"Unable to create NSData object"); }
+            }
+            if((jsonData != NULL) || (encodeState.stringBuffer.bytes.ptr == NULL)) {
+              encodeState.stringBuffer.flags        &= ~JKManagedBufferMustFree;
+              encodeState.stringBuffer.bytes.ptr     = NULL;
+              encodeState.stringBuffer.bytes.length  = 0UL;
+            }
           }
         }
         returnObject = jsonData;
