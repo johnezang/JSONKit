@@ -78,85 +78,16 @@ typedef unsigned int   NSUInteger;
 #ifndef _JSONKIT_H_
 #define _JSONKIT_H_
 
+#if defined(__GNUC__) && (__GNUC__ >= 4) && defined(__APPLE_CC__) && (__APPLE_CC__ >= 5465)
+#define JK_DEPRECATED_ATTRIBUTE __attribute__((deprecated))
+#else
+#define JK_DEPRECATED_ATTRIBUTE
+#endif
+  
 #define JSONKIT_VERSION_MAJOR 1
-#define JSONKIT_VERSION_MINOR 3
+#define JSONKIT_VERSION_MINOR 4
 
-typedef NSUInteger JKHash;
 typedef NSUInteger JKFlags;
-typedef NSUInteger JKTokenType;
-typedef JKFlags    JKManagedBufferFlags;
-typedef JKFlags    JKObjectStackFlags;
-
-typedef struct {
-  unsigned char *ptr;
-  size_t         length;
-} JKPtrRange;
-
-typedef struct {
-  const unsigned char *ptr;
-  size_t               length;
-} JKConstPtrRange;
-
-typedef struct {
-  size_t location, length;
-} JKRange;
-
-typedef struct {
-  JKPtrRange           bytes;
-  JKManagedBufferFlags flags;
-  size_t               roundSizeUpToMultipleOf;
-} JKManagedBuffer;
-
-typedef struct {
-  void               **objects, **keys;
-  JKHash              *hashes;
-  size_t              *sizes;
-  size_t               count, index, roundSizeUpToMultipleOf;
-  JKObjectStackFlags   flags;
-} JKObjectStack;
-
-typedef struct {
-  JKPtrRange bytes;
-} JKBuffer;
-
-typedef struct {
-  JKConstPtrRange bytes;
-} JKConstBuffer;
-
-typedef NSUInteger JKValueType;
-
-typedef struct {
-  JKConstPtrRange ptrRange;
-  JKHash          hash;
-  JKValueType     type;
-  union {
-    long long          longLongValue;
-    unsigned long long unsignedLongLongValue;
-    double             doubleValue;
-  } number;
-} JKTokenValue;
-
-typedef struct {
-  JKConstPtrRange tokenPtrRange;
-  JKTokenType     type;
-  JKTokenValue    value;
-  JKManagedBuffer tokenBuffer;
-} JKParseToken;
-
-
-typedef struct {
-  void          *object;
-  JKHash         hash;
-  size_t         size;
-  unsigned char *bytes;
-  JKValueType    type;
-  unsigned char  age;
-} JKTokenCacheItem;
-
-typedef struct {
-  JKTokenCacheItem *items;
-  size_t            count, clockIdx;
-} JKTokenCache;
 
 /*
   JKParseOptionComments        : Allow C style // and /_* ... *_/ (without a _, obviously) comments in JSON.
@@ -178,29 +109,6 @@ enum {
 };
 typedef JKFlags JKParseOptionFlags;
 
-typedef id (*NSNumberAllocImp)(id object, SEL selector);
-typedef id (*NSNumberInitWithUnsignedLongLongImp)(id object, SEL selector, unsigned long long value);
-
-typedef struct {
-  Class NSNumberClass;
-  NSNumberAllocImp NSNumberAlloc;
-  NSNumberInitWithUnsignedLongLongImp NSNumberInitWithUnsignedLongLong;
-} JKObjCImpCache;
-
-typedef struct {
-  JKParseOptionFlags  parseOptionFlags;
-  JKConstBuffer       stringBuffer;
-  size_t              atIndex, lineNumber, lineStartIndex;
-  size_t              prev_atIndex, prev_lineNumber, prev_lineStartIndex;
-  int                 errorIsPrev;
-  JKParseToken        token;
-  JKObjectStack       objectStack;
-  JKTokenCache        cache;
-  JKObjCImpCache      objCImpCache;
-  NSError            *error;
-} JKParseState;
-
-
 enum {
   JKSerializeOptionNone                  = 0,
   JKSerializeOptionPretty                = (1 << 0), // Not implemented yet...
@@ -210,29 +118,50 @@ enum {
 };
 typedef JKFlags JKSerializeOptionFlags;
 
-
 #ifdef    __OBJC__
+
+typedef struct JKParseState JKParseState; // Opaque internal, private type.
 
 // As a general rule of thumb, if you use a method that doesn't accept a JKParseOptionFlags argument, it defaults to JKParseOptionStrict
 
 @interface JSONDecoder : NSObject {
-  JKParseState parseState;
+  JKParseState *parseState;
 }
 + (id)decoder;
 + (id)decoderWithParseOptions:(JKParseOptionFlags)parseOptionFlags;
 - (id)initWithParseOptions:(JKParseOptionFlags)parseOptionFlags;
 - (void)clearCache;
-- (id)parseUTF8String:(const unsigned char *)string length:(size_t)length;
-- (id)parseUTF8String:(const unsigned char *)string length:(size_t)length error:(NSError **)error;
+
+// The parse... methods were deprecated in v1.4 in favor of the v1.4 objectWith... methods.
+- (id)parseUTF8String:(const unsigned char *)string length:(size_t)length                         JK_DEPRECATED_ATTRIBUTE; // Deprecated in JSONKit v1.4.  Use objectWithUTF8String:length:        instead.
+- (id)parseUTF8String:(const unsigned char *)string length:(size_t)length error:(NSError **)error JK_DEPRECATED_ATTRIBUTE; // Deprecated in JSONKit v1.4.  Use objectWithUTF8String:length:error:  instead.
 // The NSData MUST be UTF8 encoded JSON.
-- (id)parseJSONData:(NSData *)jsonData;
-- (id)parseJSONData:(NSData *)jsonData error:(NSError **)error;
+- (id)parseJSONData:(NSData *)jsonData                                                            JK_DEPRECATED_ATTRIBUTE; // Deprecated in JSONKit v1.4.  Use objectWithData:                     instead.
+- (id)parseJSONData:(NSData *)jsonData error:(NSError **)error                                    JK_DEPRECATED_ATTRIBUTE; // Deprecated in JSONKit v1.4.  Use objectWithData:error:               instead.
+
+// Methods that return immutable collection objects.
+- (id)objectWithUTF8String:(const unsigned char *)string length:(NSUInteger)length;
+- (id)objectWithUTF8String:(const unsigned char *)string length:(NSUInteger)length error:(NSError **)error;
+// The NSData MUST be UTF8 encoded JSON.
+- (id)objectWithData:(NSData *)jsonData;
+- (id)objectWithData:(NSData *)jsonData error:(NSError **)error;
+
+// Methods that return mutable collection objects.
+- (id)mutableObjectWithUTF8String:(const unsigned char *)string length:(NSUInteger)length;
+- (id)mutableObjectWithUTF8String:(const unsigned char *)string length:(NSUInteger)length error:(NSError **)error;
+// The NSData MUST be UTF8 encoded JSON.
+- (id)mutableObjectWithData:(NSData *)jsonData;
+- (id)mutableObjectWithData:(NSData *)jsonData error:(NSError **)error;
+
 @end
 
 @interface NSString (JSONKit)
 - (id)objectFromJSONString;
 - (id)objectFromJSONStringWithParseOptions:(JKParseOptionFlags)parseOptionFlags;
 - (id)objectFromJSONStringWithParseOptions:(JKParseOptionFlags)parseOptionFlags error:(NSError **)error;
+- (id)mutableObjectFromJSONString;
+- (id)mutableObjectFromJSONStringWithParseOptions:(JKParseOptionFlags)parseOptionFlags;
+- (id)mutableObjectFromJSONStringWithParseOptions:(JKParseOptionFlags)parseOptionFlags error:(NSError **)error;
 @end
 
 @interface NSData (JSONKit)
@@ -240,6 +169,9 @@ typedef JKFlags JKSerializeOptionFlags;
 - (id)objectFromJSONData;
 - (id)objectFromJSONDataWithParseOptions:(JKParseOptionFlags)parseOptionFlags;
 - (id)objectFromJSONDataWithParseOptions:(JKParseOptionFlags)parseOptionFlags error:(NSError **)error;
+- (id)mutableObjectFromJSONData;
+- (id)mutableObjectFromJSONDataWithParseOptions:(JKParseOptionFlags)parseOptionFlags;
+- (id)mutableObjectFromJSONDataWithParseOptions:(JKParseOptionFlags)parseOptionFlags error:(NSError **)error;
 @end
 
 @interface NSArray (JSONKit)
