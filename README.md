@@ -6,8 +6,8 @@ JSONKit is licensed under the terms of the BSD License.  Copyright &copy; 2011, 
 
 <table>
 <tr><th>Parsing</th><th>Serializing</th></tr>
-<tr><td><img src="http://chart.googleapis.com/chart?chf=a,s,000000|b0,lg,0,6589C760,0,6589C7B4,1|bg,lg,90,EFEFEF,0,F7F7F7,1&chxl=0:|TouchJSON|XML+.plist|json-framework|YAJL-ObjC|Binary+.plist|JSONKit|2:|Time+to+Deserialize+in+%C2%B5sec&chxp=2,40&chxr=0,0,5|1,0,3250&chxs=0,676767,11.5,1,lt,676767&chxt=y,x,x&chbh=a,5,4&chs=350x175&cht=bhs&chco=6589C783&chds=0,3250&chd=t:410.517,510.262,1351.257,1683.346,1747.953,2955.881&chg=-1,0,1,3&chm=N+*s*+%C2%B5s,676767,0,0:4,10.5|N+*s*+%C2%B5s,3d3d3d,0,5,10.5,,r:-5:1" width="350" height="175" alt="Deserialize from JSON" /></td>
-<td><img src="http://chart.googleapis.com/chart?chf=a,s,000000|b0,lg,0,699E7260,0,699E72B4,1|bg,lg,90,EFEFEF,0,F7F7F7,1&chxl=0:|TouchJSON|YAJL-ObjC|XML+.plist|json-framework|Binary+.plist|JSONKit|2:|Time+to+Serialize+in+%C2%B5sec&chxp=2,40&chxr=0,0,5|1,0,3250&chxs=0,676767,11.5,1,lt,676767&chxt=y,x,x&chbh=a,5,4&chs=350x175&cht=bhs&chco=699E7284&chds=0,3250&chd=t:96.387,626.153,1028.432,1945.511,2156.978,3051.976&chg=-1,0,1,3&chm=N+*s*+%C2%B5s,676767,0,0:4,10.5|N+*s*+%C2%B5s,4d4d4d,0,5,10.5,,r:-5:1" width="350" height="175" alt="Serialize to JSON" /></td></tr>
+<tr><td><img src="http://chart.googleapis.com/chart?chf=a,s,000000|b0,lg,0,6589C760,0,6589C7B4,1|bg,lg,90,EFEFEF,0,F7F7F7,1&chxl=0:|TouchJSON|XML+.plist|json-framework|YAJL-ObjC|gzip+JSONKit|Binary+.plist|JSONKit|2:|Time+to+Deserialize+in+%C2%B5sec&chxp=2,40&chxr=0,0,5|1,0,3250&chxs=0,676767,11.5,1,lt,676767&chxt=y,x,x&chbh=a,5,4&chs=350x185&cht=bhs&chco=6589C783&chds=0,3250&chd=t:410.517,510.262,539.614,1351.257,1683.346,1747.953,2955.881&chg=-1,0,1,3&chm=N+*s*+%C2%B5s,676767,0,0:5,10.5|N+*s*+%C2%B5s,3d3d3d,0,6,10.5,,r:-5:1&chem=y;s=text_outline;d=666,10.5,l,fff,_,Decompress+%2b+Parse+is+just;ds=0;dp=2;py=0;of=58,7|y;s=text_outline;d=666,10.5,l,fff,_,5.6%25+slower+than+Binary+.plist%21;ds=0;dp=2;py=0;of=53,-5" width="350" height="185" alt="Deserialize from JSON" /></td>
+<td><img src="http://chart.googleapis.com/chart?chf=a,s,000000|b0,lg,0,699E7260,0,699E72B4,1|bg,lg,90,EFEFEF,0,F7F7F7,1&chxl=0:|TouchJSON|YAJL-ObjC|XML+.plist|json-framework|Binary+.plist|gzip+JSONKit|JSONKit|2:|Time+to+Serialize+in+%C2%B5sec&chxp=2,40&chxr=0,0,5|1,0,3250&chxs=0,676767,11.5,1,lt,676767&chxt=y,x,x&chbh=a,5,4&chs=350x175&cht=bhs&chco=699E7284&chds=0,3250&chd=t:96.387,466.947,626.153,1028.432,1945.511,2156.978,3051.976&chg=-1,0,1,3&chm=N+*s*+%C2%B5s,676767,0,0:5,10.5|N+*s*+%C2%B5s,4d4d4d,0,6,10.5,,r:-5:1&chem=y;s=text_outline;d=666,10.5,l,fff,_,Serialize+%2b+Compress+is+34%25;ds=0;dp=1;py=0;of=51,7|y;s=text_outline;d=666,10.5,l,fff,_,faster+than+Binary+.plist%21;ds=0;dp=1;py=0;of=62,-5" width="350" height="185" alt="Serialize to JSON" /></td></tr>
 <tr><td align=center><em>23% Faster than Binary</em> <code><em>.plist</em></code><em>&thinsp;!</em></td><td align=center><em>549% Faster than Binary</em> <code><em>.plist</em></code><em>&thinsp;!</em></td></tr>
 </table>
 
@@ -16,8 +16,12 @@ JSONKit is licensed under the terms of the BSD License.  Copyright &copy; 2011, 
 * Timing results are the average of 1,000 iterations of the user + system time reported by [`getrusage`][getrusage].
 * The JSON used was [`twitter_public_timeline.json`](https://github.com/samsoffes/json-benchmarks/blob/master/Resources/twitter_public_timeline.json) from [samsoffes / json-benchmarks](https://github.com/samsoffes/json-benchmarks).
 * Since the `.plist` format does not support serializing [`NSNull`][NSNull], the `null` values in the original JSON were changed to `"null"`.
+* The [experimental](https://github.com/johnezang/JSONKit/tree/experimental) branch contains the `gzip` compression changes.
+    * JSONKit automagically links to `libz.dylib` on the fly at run time&ndash; no manual linking required.
+    * Parsing / deserializing will automagically decompress a buffer if it detects a `gzip` signature header.
+    * You can compress / `gzip` the serialized JSON by passing `JKSerializeOptionCompress` to `-JSONDataWithOptions:error:`.
 
-<hr>
+***
 
 JavaScript Object Notation, or [JSON][], is a lightweight, text-based, serialization format for structured data that is used by many web-based services and API's.  It is defined by [RFC 4627][].
 
