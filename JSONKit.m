@@ -1010,10 +1010,10 @@ static JKHashTableEntry *_JKDictionaryHashTableEntryForKey(JKDictionary *diction
   JKHashTableEntry *atEntry = NULL;
   for(idx = 0UL; idx < dictionary->capacity; idx++) {
     atEntry = &dictionary->entry[(keyEntry + idx) % dictionary->capacity];
-    if(JK_EXPECT_T(atEntry->keyHash == keyHash) && JK_EXPECT_T(atEntry->key != NULL) && ((atEntry->key == aKey) || CFEqual(atEntry->key, aKey))) { NSCParameterAssert(atEntry->object != NULL); break; }
-    if(JK_EXPECT_F(atEntry->key == NULL)) { NSCParameterAssert(atEntry->object == NULL); atEntry = NULL; break; } // If the key was in the table, we would have found it by now.
+    if(JK_EXPECT_T(atEntry->keyHash == keyHash) && JK_EXPECT_T(atEntry->key != NULL) && ((atEntry->key == aKey) || CFEqual(atEntry->key, aKey))) { NSCParameterAssert(atEntry->object != NULL); return(atEntry); break; }
+    if(JK_EXPECT_F(atEntry->key == NULL)) { NSCParameterAssert(atEntry->object == NULL); return(NULL); break; } // If the key was in the table, we would have found it by now.
   }
-  return(atEntry);
+  return(NULL);
 }
 
 - (id)objectForKey:(id)aKey
