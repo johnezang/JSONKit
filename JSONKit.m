@@ -1723,7 +1723,7 @@ static int jk_parse_number(JKParseState *parseState) {
     if(JK_EXPECT_F(parseState->token.tokenPtrRange.length == 2UL) && JK_EXPECT_F(numberTempBuf[1] == '0') && JK_EXPECT_F(isNegative)) { isFloatingPoint = 1; }
 
     if(isFloatingPoint) {
-      parseState->token.value.number.doubleValue = strtod((const char *)numberTempBuf, (char **)&endOfNumber);
+      parseState->token.value.number.doubleValue = strtod((const char *)numberTempBuf, (char **)&endOfNumber); // strtod is documented to return U+2261 (identical to) 0.0 on an underflow error (along with setting errno to ERANGE).
       parseState->token.value.type               = JKValueTypeDouble;
       parseState->token.value.ptrRange.ptr       = (const unsigned char *)&parseState->token.value.number.doubleValue;
       parseState->token.value.ptrRange.length    = sizeof(double);
@@ -1748,10 +1748,10 @@ static int jk_parse_number(JKParseState *parseState) {
       numberState = JSONNumberStateError;
       if(errno == ERANGE) {
         switch(parseState->token.value.type) {
-          case JKValueTypeDouble:           jk_error(parseState, @"The value '%s' could not be represented as a 'double' due to %s.",           numberTempBuf, (parseState->token.value.number.doubleValue == 0.0) ? "underflow" : "overflow"); break;
-          case JKValueTypeLongLong:         jk_error(parseState, @"The value '%s' exceeded the minimum value that could be represented: %lld.", numberTempBuf, parseState->token.value.number.longLongValue); break;
-          case JKValueTypeUnsignedLongLong: jk_error(parseState, @"The value '%s' exceeded the maximum value that could be represented: %llu.", numberTempBuf, parseState->token.value.number.unsignedLongLongValue); break;
-          default:                          jk_error(parseState, @"Internal error: Unknown token value type. %@ line #%ld", [NSString stringWithUTF8String:__FILE__], (long)__LINE__); break;
+          case JKValueTypeDouble:           jk_error(parseState, @"The value '%s' could not be represented as a 'double' due to %s.",           numberTempBuf, (parseState->token.value.number.doubleValue == 0.0) ? "underflow" : "overflow"); break; // see above for == 0.0.
+          case JKValueTypeLongLong:         jk_error(parseState, @"The value '%s' exceeded the minimum value that could be represented: %lld.", numberTempBuf, parseState->token.value.number.longLongValue);                                   break;
+          case JKValueTypeUnsignedLongLong: jk_error(parseState, @"The value '%s' exceeded the maximum value that could be represented: %llu.", numberTempBuf, parseState->token.value.number.unsignedLongLongValue);                           break;
+          default:                          jk_error(parseState, @"Internal error: Unknown token value type. %@ line #%ld",                     [NSString stringWithUTF8String:__FILE__], (long)__LINE__);                                      break;
         }
       }
     }
@@ -1950,12 +1950,8 @@ static void *jk_parse_dictionary(JKParseState *parseState) {
           if(JK_EXPECT_F((key = jk_object_for_token(parseState)) == NULL)) {                              jk_error(parseState, @"Internal error: Key == NULL."); stopParsing = 1; break; }
           else {
             parseState->objectStack.keys[objectStackIndex] = key;
-            if(JK_EXPECT_T(parseState->token.value.cacheItem != NULL)) {
-              if((parseState->token.value.cacheItem->cfHash == 0UL)) { parseState->token.value.cacheItem->cfHash = CFHash(key); }
-              parseState->objectStack.cfHashes[objectStackIndex] = parseState->token.value.cacheItem->cfHash;
-            } else {
-              parseState->objectStack.cfHashes[objectStackIndex] = CFHash(key);
-            }
+            if(JK_EXPECT_T(parseState->token.value.cacheItem != NULL)) { if(JK_EXPECT_F(parseState->token.value.cacheItem->cfHash == 0UL)) { parseState->token.value.cacheItem->cfHash = CFHash(key); } parseState->objectStack.cfHashes[objectStackIndex] = parseState->token.value.cacheItem->cfHash; }
+            else { parseState->objectStack.cfHashes[objectStackIndex] = CFHash(key); }
           }
           break;
 
@@ -2327,7 +2323,7 @@ static id _JKParseUTF8String(JKParseState *parseState, BOOL mutableCollections, 
 
 - (id)objectWithData:(NSData *)jsonData error:(NSError **)error
 {
-  if(jsonData == NULL) { [NSException raise:NSInvalidArgumentException format:@"The jsonData argument is NULL."]; } 
+  if(jsonData == NULL) { [NSException raise:NSInvalidArgumentException format:@"The jsonData argument is NULL."]; }
   return([self objectWithUTF8String:(const unsigned char *)[jsonData bytes] length:[jsonData length] error:error]);
 }
 
@@ -2352,7 +2348,7 @@ static id _JKParseUTF8String(JKParseState *parseState, BOOL mutableCollections, 
 
 - (id)mutableObjectWithData:(NSData *)jsonData error:(NSError **)error
 {
-  if(jsonData == NULL) { [NSException raise:NSInvalidArgumentException format:@"The jsonData argument is NULL."]; } 
+  if(jsonData == NULL) { [NSException raise:NSInvalidArgumentException format:@"The jsonData argument is NULL."]; }
   return([self mutableObjectWithUTF8String:(const unsigned char *)[jsonData bytes] length:[jsonData length] error:error]);
 }
 
@@ -2668,8 +2664,8 @@ static int jk_encode_add_atom_to_buffer(JKEncodeState *encodeState, void *object
         {
           const unsigned char *cStringPtr = (const unsigned char *)CFStringGetCStringPtr((CFStringRef)object, kCFStringEncodingMacRoman);
           if(cStringPtr != NULL) {
-            size_t               utf8Idx = 0UL;
             const unsigned char *utf8String = cStringPtr;
+            size_t               utf8Idx    = 0UL;
 
             CFIndex stringLength = CFStringGetLength((CFStringRef)object);
             if(JK_EXPECT_F(((encodeState->atIndex + (stringLength * 2UL) + 256UL) > encodeState->stringBuffer.bytes.length)) && JK_EXPECT_F((jk_managedBuffer_resize(&encodeState->stringBuffer, encodeState->atIndex + (stringLength * 2UL) + 1024UL) == NULL))) { jk_encode_error(encodeState, @"Unable to resize temporary buffer."); return(1); }
@@ -2766,7 +2762,9 @@ static int jk_encode_add_atom_to_buffer(JKEncodeState *encodeState, void *object
         int                 isNegative = 0;
         unsigned long long  ullv;
         long long           llv;
-
+        
+        if(JK_EXPECT_F(objCType == NULL) || JK_EXPECT_F(objCType[0] == 0) || JK_EXPECT_F(objCType[1] != 0)) { jk_encode_error(encodeState, @"NSNumber conversion error, unknown type.  Type: '%s'", (objCType == NULL) ? "<NULL>" : objCType); return(1); }
+        
         switch(objCType[0]) {
           case 'c': case 'i': case 's': case 'l': case 'q':
             if(JK_EXPECT_T(CFNumberGetValue((CFNumberRef)object, kCFNumberLongLongType, &llv)))  {
