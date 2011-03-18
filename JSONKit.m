@@ -2447,6 +2447,26 @@ exitNow:
   return(_NSStringObjectFromJSONString(self, parseOptionFlags, error, YES));
 }
 
+- (NSData *)JSONData
+{
+	return([self JSONDataWithOptions:JKSerializeOptionNone error:NULL]);
+}
+
+- (NSData *)JSONDataWithOptions:(JKSerializeOptionFlags)serializeOptions error:(NSError **)error
+{
+	return(jk_encode(self, serializeOptions, JKEncodeAsData, error));
+}
+
+- (NSString *)JSONString
+{
+	return([self JSONStringWithOptions:JKSerializeOptionNone error:NULL]);
+}
+
+- (NSString *)JSONStringWithOptions:(JKSerializeOptionFlags)serializeOptions error:(NSError **)error
+{
+	return(jk_encode(self, serializeOptions, JKEncodeAsString, error));
+}
+
 @end
 
 @implementation NSData (JSONKit)
