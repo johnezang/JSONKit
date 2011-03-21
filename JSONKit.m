@@ -615,6 +615,7 @@ static JKArray *_JKArrayCreate(id *objects, NSUInteger count, BOOL mutableCollec
   JKArray *array = NULL;
   if(JK_EXPECT_T((array = (JKArray *)calloc(1UL, _JKArrayInstanceSize)) != NULL)) { // Directly allocate the JKArray instance via calloc.
     array->isa      = (mutableCollection == NO) ? _JKArrayClass : _JKMutableArrayClass;
+    if((array = [array init]) == NULL) { return(NULL); }
     array->capacity = count;
     array->count    = count;
     if(JK_EXPECT_F((array->objects = (id *)malloc(sizeof(id) * array->capacity)) == NULL)) { [array autorelease]; return(NULL); }
@@ -685,7 +686,8 @@ static void _JKArrayRemoveObjectAtIndex(JKArray *array, NSUInteger objectIndex) 
 - (void)getObjects:(id *)objectsPtr range:(NSRange)range
 {
   NSParameterAssert((objects != NULL) && (count <= capacity));
-  if((range.location > count) || (NSMaxRange(range) > count)) { [NSException raise:NSRangeException format:@"*** -[%@ %@]: index (%lu) beyond bounds (%lu)", NSStringFromClass([self class]), NSStringFromSelector(_cmd), NSMaxRange(range), count]; }
+  if((objectsPtr     == NULL)  && (NSMaxRange(range) > 0UL))   { [NSException raise:NSRangeException format:@"*** -[%@ %@]: pointer to objects array is NULL but range length is %lu", NSStringFromClass([self class]), NSStringFromSelector(_cmd), NSMaxRange(range)];        }
+  if((range.location >  count) || (NSMaxRange(range) > count)) { [NSException raise:NSRangeException format:@"*** -[%@ %@]: index (%lu) beyond bounds (%lu)",                          NSStringFromClass([self class]), NSStringFromSelector(_cmd), NSMaxRange(range), count]; }
   memcpy(objectsPtr, objects + range.location, range.length * sizeof(id));
 }
 
@@ -698,7 +700,7 @@ static void _JKArrayRemoveObjectAtIndex(JKArray *array, NSUInteger objectIndex) 
 
 - (NSUInteger)countByEnumeratingWithState:(NSFastEnumerationState *)state objects:(id *)stackbuf count:(NSUInteger)len
 {
-  NSParameterAssert((objects != NULL) && (count <= capacity));
+  NSParameterAssert((state != NULL) && (stackbuf != NULL) && (len > 0UL) && (objects != NULL) && (count <= capacity));
   if(JK_EXPECT_F(state->state == 0UL))   { state->mutationsPtr = (unsigned long *)&mutations; state->itemsPtr = stackbuf; }
   if(JK_EXPECT_F(state->state >= count)) { return(0UL); }
   
@@ -934,6 +936,7 @@ static JKDictionary *_JKDictionaryCreate(id *keys, NSUInteger *keyHashes, id *ob
   JKDictionary *dictionary = NULL;
   if(JK_EXPECT_T((dictionary = (JKDictionary *)calloc(1UL, _JKDictionaryInstanceSize)) != NULL)) { // Directly allocate the JKArray instance via calloc.
     dictionary->isa      = (mutableCollection == NO) ? _JKDictionaryClass : _JKMutableDictionaryClass;
+    if((dictionary = [dictionary init]) == NULL) { return(NULL); }
     dictionary->capacity = _JKDictionaryCapacityForCount(count);
     dictionary->count    = 0UL;
     
@@ -1023,6 +1026,7 @@ static JKHashTableEntry *_JKDictionaryHashTableEntryForKey(JKDictionary *diction
 
 - (id)objectForKey:(id)aKey
 {
+  NSParameterAssert((entry != NULL) && (count <= capacity));
   JKHashTableEntry *atEntry = _JKDictionaryHashTableEntryForKey(self, aKey);
   return((atEntry != NULL) ? atEntry->object : NULL);
 }
@@ -1050,7 +1054,7 @@ static NSUInteger _JKDictionaryGetKeysAndObjects(JKDictionary *dictionary, NSUIn
 
 - (NSUInteger)countByEnumeratingWithState:(NSFastEnumerationState *)state objects:(id *)stackbuf count:(NSUInteger)len
 {
-  NSParameterAssert((entry != NULL) && (count <= capacity));
+  NSParameterAssert((state != NULL) && (stackbuf != NULL) && (len > 0UL) && (entry != NULL) && (count <= capacity));
   if(JK_EXPECT_F(state->state == 0UL))      { state->mutationsPtr = (unsigned long *)&mutations; state->itemsPtr = stackbuf; }
   if(JK_EXPECT_F(state->state >= capacity)) { return(0UL); }
   
@@ -1112,7 +1116,7 @@ static NSUInteger _JKDictionaryGetKeysAndObjects(JKDictionary *dictionary, NSUIn
 
 - (void)setObject:(id)anObject forKey:(id)aKey
 {
-  if(aKey     == NULL) { [NSException raise:NSInvalidArgumentException format:@"*** -[%@ %@]: attempt to insert nil key", NSStringFromClass([self class]), NSStringFromSelector(_cmd)]; }
+  if(aKey     == NULL) { [NSException raise:NSInvalidArgumentException format:@"*** -[%@ %@]: attempt to insert nil key",             NSStringFromClass([self class]), NSStringFromSelector(_cmd)];       }
   if(anObject == NULL) { [NSException raise:NSInvalidArgumentException format:@"*** -[%@ %@]: attempt to insert nil value (key: %@)", NSStringFromClass([self class]), NSStringFromSelector(_cmd), aKey]; }
   
   _JKDictionaryResizeIfNeccessary((JKDictionary *)self);
@@ -1126,6 +1130,7 @@ static NSUInteger _JKDictionaryGetKeysAndObjects(JKDictionary *dictionary, NSUIn
 
 - (void)removeObjectForKey:(id)aKey
 {
+  if(aKey == NULL) { [NSException raise:NSInvalidArgumentException format:@"*** -[%@ %@]: attempt to remove nil key", NSStringFromClass([self class]), NSStringFromSelector(_cmd)]; }
   JKHashTableEntry *entry = _JKDictionaryHashTableEntryForKey((JKDictionary *)self, aKey);
   if(entry != NULL) {
     _JKDictionaryRemoveObjectWithEntry((JKDictionary *)self, entry);
