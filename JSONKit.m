@@ -569,13 +569,13 @@ JK_STATIC_INLINE JKHash calculateHash(JKHash currentHash, unsigned char c);
 static void jk_swizzleInstanceMethod(Class fromClass, Class toClass, SEL selector) {
   fromClass = class_isMetaClass(fromClass) ? objc_getClass(class_getName(fromClass)) : fromClass;
   toClass   = class_isMetaClass(toClass)   ? objc_getClass(class_getName(toClass))   : toClass;
-  class_replaceMethod(fromClass, selector, method_getImplementation(class_getInstanceMethod(toClass, selector)), method_getTypeEncoding(class_getInstanceMethod(toClass, selector)));
+  class_replaceMethod(fromClass, selector, method_getImplementation(class_getInstanceMethod(toClass, selector)), method_getTypeEncoding(class_getInstanceMethod(fromClass, selector)));
 }
 
 static void jk_swizzleClassMethod(Class fromClass, Class toClass, SEL selector) {
   fromClass = class_isMetaClass(fromClass) ? fromClass : objc_getMetaClass(class_getName(fromClass));
   toClass   = class_isMetaClass(toClass)   ? toClass   : objc_getMetaClass(class_getName(toClass));
-  class_replaceMethod(fromClass, selector, method_getImplementation(class_getClassMethod(toClass, selector)), method_getTypeEncoding(class_getClassMethod(toClass, selector)));
+  class_replaceMethod(fromClass, selector, method_getImplementation(class_getClassMethod(toClass, selector)), method_getTypeEncoding(class_getClassMethod(fromClass, selector)));
 }
 
 #pragma mark -
