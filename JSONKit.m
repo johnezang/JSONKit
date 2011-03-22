@@ -597,8 +597,7 @@ static size_t _JKArrayInstanceSize = 0UL;
 
   _JKArrayClass        = objc_getClass("JKArray");
   _JKMutableArrayClass = objc_getClass("JKMutableArray");
-  _JKArrayInstanceSize = class_getInstanceSize(_JKArrayClass);
-  if(_JKArrayInstanceSize < 16UL) { _JKArrayInstanceSize = 16UL; }
+  _JKArrayInstanceSize = jk_max(16UL, class_getInstanceSize(_JKArrayClass));
 
   [pool release]; pool = NULL;
 }
@@ -759,26 +758,12 @@ static void _JKArrayRemoveObjectAtIndex(JKArray *array, NSUInteger objectIndex) 
   _JKArrayIncrementMutations((JKArray *)self);
 }
 
-/*
-- (void)addObject:(id)anObject
-{
-  [self insertObject:anObject atIndex:_JKArrayCount((JKArray *)self)];
-}
-*/
-
 - (void)removeObjectAtIndex:(NSUInteger)objectIndex
 {
   if(objectIndex >= _JKArrayCount((JKArray *)self)) { [NSException raise:NSRangeException format:@"*** -[%@ %@]: index (%lu) beyond bounds (%lu)", NSStringFromClass([self class]), NSStringFromSelector(_cmd), objectIndex, _JKArrayCount((JKArray *)self)]; }
   _JKArrayRemoveObjectAtIndex((JKArray *)self, objectIndex);
   _JKArrayIncrementMutations((JKArray *)self);
 }
-
-/*
-- (void)removeLastObject
-{
-  [self removeObjectAtIndex:_JKArrayCount((JKArray *)self) == 0UL ? 0UL : (_JKArrayCount((JKArray *)self) - 1UL)];
-}
-*/
 
 - (void)replaceObjectAtIndex:(NSUInteger)objectIndex withObject:(id)anObject
 {
@@ -882,8 +867,7 @@ static size_t _JKDictionaryInstanceSize = 0UL;
 
   _JKDictionaryClass        = objc_getClass("JKDictionary");
   _JKMutableDictionaryClass = objc_getClass("JKMutableDictionary");
-  _JKDictionaryInstanceSize = class_getInstanceSize(_JKDictionaryClass);
-  if(_JKDictionaryInstanceSize < 16UL) { _JKDictionaryInstanceSize = 16UL; }
+  _JKDictionaryInstanceSize = jk_max(16UL, class_getInstanceSize(_JKDictionaryClass));
 
   [pool release]; pool = NULL;
 }
