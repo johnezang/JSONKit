@@ -153,7 +153,11 @@ typedef struct JKParseState JKParseState; // Opaque internal, private type.
 
 @end
 
-@interface NSString (JSONKit)
+////////////
+#pragma mark Deserializing methods
+////////////
+
+@interface NSString (JSONKitDeserializing)
 - (id)objectFromJSONString;
 - (id)objectFromJSONStringWithParseOptions:(JKParseOptionFlags)parseOptionFlags;
 - (id)objectFromJSONStringWithParseOptions:(JKParseOptionFlags)parseOptionFlags error:(NSError **)error;
@@ -162,7 +166,7 @@ typedef struct JKParseState JKParseState; // Opaque internal, private type.
 - (id)mutableObjectFromJSONStringWithParseOptions:(JKParseOptionFlags)parseOptionFlags error:(NSError **)error;
 @end
 
-@interface NSData (JSONKit)
+@interface NSData (JSONKitDeserializing)
 // The NSData MUST be UTF8 encoded JSON.
 - (id)objectFromJSONData;
 - (id)objectFromJSONDataWithParseOptions:(JKParseOptionFlags)parseOptionFlags;
@@ -172,14 +176,29 @@ typedef struct JKParseState JKParseState; // Opaque internal, private type.
 - (id)mutableObjectFromJSONDataWithParseOptions:(JKParseOptionFlags)parseOptionFlags error:(NSError **)error;
 @end
 
-@interface NSArray (JSONKit)
+////////////
+#pragma mark Serializing methods
+////////////
+  
+@interface NSString (JSONKitSerializing)
+// Convenience methods for those that need to serialize the receiving NSString (i.e., instead of having to serialize a NSArray with a single NSString, you can "serialize to JSON" just the NSString).
+// Normally, a string that is serialized to JSON has quotation marks surrounding it, which you may or may not want when serializing a single string, and can be controlled with includeQuotes:
+// includeQuotes:YES `a "test"...` -> `"a \"test\"..."`
+// includeQuotes:NO  `a "test"...` -> `a \"test\"...`
+- (NSData *)JSONData;     // Invokes JSONDataWithOptions:JKSerializeOptionNone   includeQuotes:YES
+- (NSData *)JSONDataWithOptions:(JKSerializeOptionFlags)serializeOptions includeQuotes:(BOOL)includeQuotes error:(NSError **)error;
+- (NSString *)JSONString; // Invokes JSONStringWithOptions:JKSerializeOptionNone includeQuotes:YES
+- (NSString *)JSONStringWithOptions:(JKSerializeOptionFlags)serializeOptions includeQuotes:(BOOL)includeQuotes error:(NSError **)error;
+@end
+
+@interface NSArray (JSONKitSerializing)
 - (NSData *)JSONData;
 - (NSData *)JSONDataWithOptions:(JKSerializeOptionFlags)serializeOptions error:(NSError **)error;
 - (NSString *)JSONString;
 - (NSString *)JSONStringWithOptions:(JKSerializeOptionFlags)serializeOptions error:(NSError **)error;
 @end
 
-@interface NSDictionary (JSONKit)
+@interface NSDictionary (JSONKitSerializing)
 - (NSData *)JSONData;
 - (NSData *)JSONDataWithOptions:(JKSerializeOptionFlags)serializeOptions error:(NSError **)error;
 - (NSString *)JSONString;

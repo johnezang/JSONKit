@@ -208,7 +208,16 @@ The <code>objectWith&hellip;</code> methods return immutable collection objects 
 
 ### Serializing Interface
 
-**Note:** The bytes contained in the returned [`NSData`][NSData] object is `UTF8` encoded.
+The serializing interface includes [`NSString`][NSString] convenience methods for those that need to serialize a single [`NSString`][NSString].  For those that need this functionality, the [`NSString`][NSString] additions are much more convenient than having to wrap a single [`NSString`][NSString] in a [`NSArray`][NSArray], which then requires stripping the unneeded `[`&hellip;`]` characters from the serialized JSON result.  When serializing a single [`NSString`][NSString], you can control whether or not the serialized JSON result is surrounded by quotation marks using the `includeQuotes:` argument:
+
+<table>
+<tr><th>Example</th><th>Result</th><th>Argument</th></tr>
+<tr><td><code>a "test"...</code></td><td><code>"a \"test\"..."</code></td><td><code>includeQuotes:YES</code></td></tr>
+<tr><td><code>a "test"...</code></td><td><code>a \"test\"...</code></td><td><code>includeQuotes:NO</code></td></tr>
+</table>
+
+**Note:** The [`NSString`][NSString] methods that do not include a `includeQuotes:` argument behave as if invoked with `includeQuotes:YES`.  
+**Note:** The bytes contained in the returned [`NSData`][NSData] object are `UTF8` encoded.
 
 #### NSArray and NSDictionary Interface
 
@@ -216,6 +225,13 @@ The <code>objectWith&hellip;</code> methods return immutable collection objects 
 - (NSData *)JSONDataWithOptions:(JKSerializeOptionFlags)serializeOptions error:(NSError **)error;
 - (NSString *)JSONString;
 - (NSString *)JSONStringWithOptions:(JKSerializeOptionFlags)serializeOptions error:(NSError **)error;</pre>
+
+#### NSString Interface
+
+<pre>- (NSData *)JSONData;
+- (NSData *)JSONDataWithOptions:(JKSerializeOptionFlags)serializeOptions includeQuotes:(BOOL)includeQuotes error:(NSError **)error;
+- (NSString *)JSONString;
+- (NSString *)JSONStringWithOptions:(JKSerializeOptionFlags)serializeOptions includeQuotes:(BOOL)includeQuotes error:(NSError **)error;</pre>
 
 #### JKSerializeOptionFlags
 

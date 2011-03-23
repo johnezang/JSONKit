@@ -299,10 +299,15 @@ enum {
 typedef NSUInteger JKValueType;
 
 enum {
-  JKEncodeAsData   = 1,
-  JKEncodeAsString = 2,
+  JKEncodeOptionAsData              = 1,
+  JKEncodeOptionAsString            = 2,
+  JKEncodeOptionAsTypeMask          = 0x7,
+  JKEncodeOptionCollectionObj       = (1 << 3),
+  JKEncodeOptionStringObj           = (1 << 4),
+  JKEncodeOptionStringObjTrimQuotes = (1 << 5),
+  
 };
-typedef NSUInteger JKEncodeAsType;
+typedef NSUInteger JKEncodeOptionType;
 
 typedef NSUInteger JKHash;
 
@@ -438,9 +443,21 @@ struct JKEncodeState {
   JKFastClassLookup       fastClassLookup;
   JKEncodeCache           cache[JK_ENCODE_CACHE_SLOTS];
   JKSerializeOptionFlags  serializeOptionFlags;
+  JKEncodeOptionType      encodeOption;
   size_t                  depth;
   NSError                *error;
 };
+
+// This is a JSONKit private class.
+@interface JKSerializer : NSObject {
+  JKEncodeState *encodeState;
+}
+
++ (id)serializeObject:(id)object options:(JKSerializeOptionFlags)optionFlags encodeOption:(JKEncodeOptionType)encodeOption error:(NSError **)error;
+- (id)serializeObject:(id)object options:(JKSerializeOptionFlags)optionFlags encodeOption:(JKEncodeOptionType)encodeOption error:(NSError **)error;
+- (void)releaseState;
+
+@end
 
 struct JKHashTableEntry {
   NSUInteger keyHash;
@@ -553,7 +570,6 @@ static int jk_encode_writen(JKEncodeState *encodeState, JKEncodeCache *cacheSlot
 JK_STATIC_INLINE JKHash jk_encode_object_hash(void *objectPtr);
 JK_STATIC_INLINE void jk_encode_updateCache(JKEncodeState *encodeState, JKEncodeCache *cacheSlot, size_t startingAtIndex, id object);
 static int jk_encode_add_atom_to_buffer(JKEncodeState *encodeState, void *objectPtr);
-static id jk_encode(void *object, JKSerializeOptionFlags optionFlags, JKEncodeAsType encodeAs, NSError **error);
 
 #define jk_encode_write1(es, dc, f)  (_jk_encode_useWrite1Fast ? jk_encode_write1fast(es, dc, f) : jk_encode_write1slow(es, dc, f))
 
@@ -565,7 +581,7 @@ JK_STATIC_INLINE JKHash calculateHash(JKHash currentHash, unsigned char c);
 #pragma mark -
 #pragma mark ObjC Voodoo
 
-// These two functions are used to perform some ObjC swizzeling voodoo to implement our mutable collection classes.
+// These two functions are used to perform some ObjC swizzling voodoo to implement our mutable collection classes.
 static void jk_swizzleInstanceMethod(Class fromClass, Class toClass, SEL selector) {
   fromClass = class_isMetaClass(fromClass) ? objc_getClass(class_getName(fromClass)) : fromClass;
   toClass   = class_isMetaClass(toClass)   ? objc_getClass(class_getName(toClass))   : toClass;
@@ -2257,37 +2273,38 @@ static id _JKParseUTF8String(JKParseState *parseState, BOOL mutableCollections, 
   return(parsedJSON);
 }
 
+////////////
+#pragma mark Deprecated as of v1.4
+////////////
+
 // Deprecated in JSONKit v1.4.  Use objectWithUTF8String:length: instead.
 - (id)parseUTF8String:(const unsigned char *)string length:(size_t)length
 {
-  return([self parseUTF8String:string length:length error:NULL]);
+  return([self objectWithUTF8String:string length:length error:NULL]);
 }
 
 // Deprecated in JSONKit v1.4.  Use objectWithUTF8String:length:error: instead.
 - (id)parseUTF8String:(const unsigned char *)string length:(size_t)length error:(NSError **)error
 {
-  if(parseState == NULL) { [NSException raise:NSInternalInconsistencyException format:@"parseState is NULL."];          }
-  if(string     == NULL) { [NSException raise:NSInvalidArgumentException       format:@"The string argument is NULL."]; }
-
-  return(_JKParseUTF8String(parseState, NO, string, length, error));
+  return([self objectWithUTF8String:string length:length error:error]);
 }
 
 // Deprecated in JSONKit v1.4.  Use objectWithData: instead.
 - (id)parseJSONData:(NSData *)jsonData
 {
-  return([self parseJSONData:jsonData error:NULL]);
+  return([self objectWithData:jsonData error:NULL]);
 }
 
 // Deprecated in JSONKit v1.4.  Use objectWithData:error: instead.
 - (id)parseJSONData:(NSData *)jsonData error:(NSError **)error
 {
-  if(jsonData == NULL) { [NSException raise:NSInvalidArgumentException format:@"The jsonData argument is NULL."]; } 
-  return([self parseUTF8String:(const unsigned char *)[jsonData bytes] length:[jsonData length] error:error]);
+  return([self objectWithData:jsonData error:error]);
 }
 
+////////////
+#pragma mark Methods that return immutable collection objects
+////////////
 
-
-// Methods that return immutable collection objects.
 - (id)objectWithUTF8String:(const unsigned char *)string length:(NSUInteger)length
 {
   return([self objectWithUTF8String:string length:length error:NULL]);
@@ -2312,7 +2329,10 @@ static id _JKParseUTF8String(JKParseState *parseState, BOOL mutableCollections, 
   return([self objectWithUTF8String:(const unsigned char *)[jsonData bytes] length:[jsonData length] error:error]);
 }
 
-// Methods that return mutable collection objects.
+////////////
+#pragma mark Methods that return mutable collection objects
+////////////
+
 - (id)mutableObjectWithUTF8String:(const unsigned char *)string length:(NSUInteger)length
 {
   return([self mutableObjectWithUTF8String:string length:length error:NULL]);
@@ -2374,7 +2394,7 @@ static id _JKParseUTF8String(JKParseState *parseState, BOOL mutableCollections, 
  autorelease limbo, but we've done our best to minimize that impact, so it all balances out.
  */
 
-@implementation NSString (JSONKit)
+@implementation NSString (JSONKitDeserializing)
 
 static id _NSStringObjectFromJSONString(NSString *jsonString, JKParseOptionFlags parseOptionFlags, NSError **error, BOOL mutableCollection) {
   id                returnObject = NULL;
@@ -2434,7 +2454,7 @@ exitNow:
 
 @end
 
-@implementation NSData (JSONKit)
+@implementation NSData (JSONKitDeserializing)
 
 - (id)objectFromJSONData
 {
@@ -2639,7 +2659,7 @@ static int jk_encode_add_atom_to_buffer(JKEncodeState *encodeState, void *object
             CFIndex stringLength = CFStringGetLength((CFStringRef)object);
             if(JK_EXPECT_F(((encodeState->atIndex + (stringLength * 2UL) + 256UL) > encodeState->stringBuffer.bytes.length)) && JK_EXPECT_F((jk_managedBuffer_resize(&encodeState->stringBuffer, encodeState->atIndex + (stringLength * 2UL) + 1024UL) == NULL))) { jk_encode_error(encodeState, @"Unable to resize temporary buffer."); return(1); }
 
-            encodeState->stringBuffer.bytes.ptr[encodeState->atIndex++] = '\"';
+            if(JK_EXPECT_T((encodeState->encodeOption & JKEncodeOptionStringObjTrimQuotes) == 0UL)) { encodeState->stringBuffer.bytes.ptr[encodeState->atIndex++] = '\"'; }
             for(utf8Idx = 0UL; utf8String[utf8Idx] != 0U; utf8Idx++) {
               NSCParameterAssert(((&encodeState->stringBuffer.bytes.ptr[encodeState->atIndex]) - encodeState->stringBuffer.bytes.ptr) < (ssize_t)encodeState->stringBuffer.bytes.length);
               NSCParameterAssert(encodeState->atIndex < encodeState->stringBuffer.bytes.length);
@@ -2659,7 +2679,7 @@ static int jk_encode_add_atom_to_buffer(JKEncodeState *encodeState, void *object
               }
             }
             NSCParameterAssert((encodeState->atIndex + 1UL) < encodeState->stringBuffer.bytes.length);
-            encodeState->stringBuffer.bytes.ptr[encodeState->atIndex++] = '\"';
+            if(JK_EXPECT_T((encodeState->encodeOption & JKEncodeOptionStringObjTrimQuotes) == 0UL)) { encodeState->stringBuffer.bytes.ptr[encodeState->atIndex++] = '\"'; }
             jk_encode_updateCache(encodeState, cacheSlot, startingAtIndex, object);
             return(0);
           }
@@ -2681,7 +2701,7 @@ static int jk_encode_add_atom_to_buffer(JKEncodeState *encodeState, void *object
           const unsigned char *utf8String = encodeState->utf8ConversionBuffer.bytes.ptr;
         
           size_t utf8Idx = 0UL;
-          encodeState->stringBuffer.bytes.ptr[encodeState->atIndex++] = '\"';
+          if(JK_EXPECT_T((encodeState->encodeOption & JKEncodeOptionStringObjTrimQuotes) == 0UL)) { encodeState->stringBuffer.bytes.ptr[encodeState->atIndex++] = '\"'; }
           for(utf8Idx = 0UL; utf8Idx < (size_t)usedBytes; utf8Idx++) {
             NSCParameterAssert(((&encodeState->stringBuffer.bytes.ptr[encodeState->atIndex]) - encodeState->stringBuffer.bytes.ptr) < (ssize_t)encodeState->stringBuffer.bytes.length);
             NSCParameterAssert(encodeState->atIndex < encodeState->stringBuffer.bytes.length);
@@ -2714,7 +2734,7 @@ static int jk_encode_add_atom_to_buffer(JKEncodeState *encodeState, void *object
             }
           }
           NSCParameterAssert((encodeState->atIndex + 1UL) < encodeState->stringBuffer.bytes.length);
-          encodeState->stringBuffer.bytes.ptr[encodeState->atIndex++] = '\"';
+          if(JK_EXPECT_T((encodeState->encodeOption & JKEncodeOptionStringObjTrimQuotes) == 0UL)) { encodeState->stringBuffer.bytes.ptr[encodeState->atIndex++] = '\"'; }
           jk_encode_updateCache(encodeState, cacheSlot, startingAtIndex, object);
           return(0);
         }
@@ -2820,102 +2840,118 @@ static int jk_encode_add_atom_to_buffer(JKEncodeState *encodeState, void *object
 }
 
 
-static id jk_encode(void *object, JKSerializeOptionFlags optionFlags, JKEncodeAsType encodeAs, NSError **error) {
-  NSCParameterAssert(object != NULL);
+@implementation JKSerializer
+
++ (id)serializeObject:(id)object options:(JKSerializeOptionFlags)optionFlags encodeOption:(JKEncodeOptionType)encodeOption error:(NSError **)error
+{
+  return([[[[self alloc] init] autorelease] serializeObject:object options:optionFlags encodeOption:encodeOption error:error]);
+}
+
+- (id)serializeObject:(id)object options:(JKSerializeOptionFlags)optionFlags encodeOption:(JKEncodeOptionType)encodeOption error:(NSError **)error
+{
+  NSParameterAssert((object != NULL) && (encodeState == NULL) && 
+                    (((encodeOption & JKEncodeOptionCollectionObj) != 0UL) ? (((encodeOption & JKEncodeOptionStringObj)     == 0UL) && ((encodeOption & JKEncodeOptionStringObjTrimQuotes) == 0UL)) : 1) &&
+                    (((encodeOption & JKEncodeOptionStringObj)     != 0UL) ?  ((encodeOption & JKEncodeOptionCollectionObj) == 0UL)                                                                 : 1));
+
   id returnObject = NULL;
+
+  if(encodeState != NULL) { [self releaseState]; }
+  if((encodeState = (struct JKEncodeState *)calloc(1UL, sizeof(JKEncodeState))) == NULL) { [NSException exceptionWithName:NSMallocException reason:@"Unable to allocate state structure." userInfo:NULL]; }
 
   if((error != NULL) && (*error != NULL)) { *error = NULL; }
 
-  JKEncodeState encodeState;
-  memset(&encodeState, 0, sizeof(JKEncodeState));
-
-  encodeState.serializeOptionFlags = optionFlags;
-
-  encodeState.stringBuffer.roundSizeUpToMultipleOf         = (1024UL * 32UL);
-  encodeState.utf8ConversionBuffer.roundSizeUpToMultipleOf = 4096UL;
+  encodeState->serializeOptionFlags                         = optionFlags;
+  encodeState->encodeOption                                 = encodeOption;
+  encodeState->stringBuffer.roundSizeUpToMultipleOf         = (1024UL * 32UL);
+  encodeState->utf8ConversionBuffer.roundSizeUpToMultipleOf = 4096UL;
 
   unsigned char stackJSONBuffer[JK_JSONBUFFER_SIZE] JK_ALIGNED(64);
-  jk_managedBuffer_setToStackBuffer(&encodeState.stringBuffer, stackJSONBuffer, sizeof(stackJSONBuffer));
+  jk_managedBuffer_setToStackBuffer(&encodeState->stringBuffer,         stackJSONBuffer, sizeof(stackJSONBuffer));
 
   unsigned char stackUTF8Buffer[JK_UTF8BUFFER_SIZE] JK_ALIGNED(64);
-  jk_managedBuffer_setToStackBuffer(&encodeState.utf8ConversionBuffer, stackUTF8Buffer, sizeof(stackUTF8Buffer));
+  jk_managedBuffer_setToStackBuffer(&encodeState->utf8ConversionBuffer, stackUTF8Buffer, sizeof(stackUTF8Buffer));
 
-  if(jk_encode_add_atom_to_buffer(&encodeState, object) == 0) {
-    switch(encodeAs) {
-      case JKEncodeAsData: {
-        NSData *jsonData = NULL;
-        if((encodeState.stringBuffer.flags & JKManagedBufferMustFree) == 0) {
-          if((jsonData = [(NSData *)CFDataCreate(NULL, encodeState.stringBuffer.bytes.ptr, encodeState.atIndex) autorelease]) == NULL) { jk_encode_error(&encodeState, @"Unable to create NSData object"); }
-        } else {
-          if((encodeState.stringBuffer.bytes.ptr = (unsigned char *)reallocf(encodeState.stringBuffer.bytes.ptr, encodeState.atIndex)) != NULL) {
-            if((jsonData = [(NSData *)CFDataCreateWithBytesNoCopy(NULL, encodeState.stringBuffer.bytes.ptr, encodeState.atIndex, NULL) autorelease]) == NULL) { jk_encode_error(&encodeState, @"Unable to create NSData object"); }
-          }
-          if((jsonData != NULL) || (encodeState.stringBuffer.bytes.ptr == NULL)) {
-            encodeState.stringBuffer.flags        &= ~JKManagedBufferMustFree;
-            encodeState.stringBuffer.bytes.ptr     = NULL;
-            encodeState.stringBuffer.bytes.length  = 0UL;
-          }
-        }
-        returnObject = jsonData;
-      }
+  if(((encodeOption & JKEncodeOptionCollectionObj) != 0UL) && (([object isKindOfClass:[NSArray  class]] == NO) && ([object isKindOfClass:[NSDictionary class]] == NO))) { jk_encode_error(encodeState, @"Unable to serialize object class %@, expected a NSArray or NSDictionary.", NSStringFromClass([object class])); goto errorExit; }
+  if(((encodeOption & JKEncodeOptionStringObj)     != 0UL) &&  ([object isKindOfClass:[NSString class]] == NO))                                                         { jk_encode_error(encodeState, @"Unable to serialize object class %@, expected a NSString.", NSStringFromClass([object class])); goto errorExit; }
+
+  if(jk_encode_add_atom_to_buffer(encodeState, object) == 0) {
+    BOOL stackBuffer = ((encodeState->stringBuffer.flags & JKManagedBufferMustFree) == 0UL) ? YES : NO;
+    
+    if((encodeState->atIndex < 2UL))
+    if((stackBuffer == NO) && ((encodeState->stringBuffer.bytes.ptr = (unsigned char *)reallocf(encodeState->stringBuffer.bytes.ptr, encodeState->atIndex + 16UL)) == NULL)) { jk_encode_error(encodeState, @"Unable to realloc buffer"); goto errorExit; }
+
+    switch((encodeOption & JKEncodeOptionAsTypeMask)) {
+      case JKEncodeOptionAsData:
+        if(stackBuffer == YES) { if((returnObject = [(id)CFDataCreate(                 NULL,                encodeState->stringBuffer.bytes.ptr, (CFIndex)encodeState->atIndex)                                  autorelease]) == NULL) { jk_encode_error(encodeState, @"Unable to create NSData object"); } }
+        else                   { if((returnObject = [(id)CFDataCreateWithBytesNoCopy(  NULL,                encodeState->stringBuffer.bytes.ptr, (CFIndex)encodeState->atIndex, NULL)                            autorelease]) == NULL) { jk_encode_error(encodeState, @"Unable to create NSData object"); } }
         break;
 
-      case JKEncodeAsString: {
-        NSString *jsonString = NULL;
-        if((encodeState.stringBuffer.flags & JKManagedBufferMustFree) == 0) {
-          if((jsonString = [(NSString *)CFStringCreateWithBytes(NULL, (const UInt8 *)encodeState.stringBuffer.bytes.ptr, (CFIndex)encodeState.atIndex, kCFStringEncodingUTF8, NO) autorelease]) == NULL) { jk_encode_error(&encodeState, @"Unable to create NSString object"); }
-        } else {
-          if((encodeState.stringBuffer.bytes.ptr = (unsigned char *)reallocf(encodeState.stringBuffer.bytes.ptr, encodeState.atIndex + 256UL)) != NULL) {
-            encodeState.stringBuffer.bytes.ptr[encodeState.atIndex + 1UL] = 0;
-            if((jsonString = [(NSString *)CFStringCreateWithBytesNoCopy(NULL, (const UInt8 *)encodeState.stringBuffer.bytes.ptr, (CFIndex)encodeState.atIndex, kCFStringEncodingUTF8, NO, NULL) autorelease]) == NULL) { jk_encode_error(&encodeState, @"Unable to create NSString object"); }
-          }
-          if((jsonString != NULL) || (encodeState.stringBuffer.bytes.ptr == NULL)) {
-            encodeState.stringBuffer.flags        &= ~JKManagedBufferMustFree;
-            encodeState.stringBuffer.bytes.ptr     = NULL;
-            encodeState.stringBuffer.bytes.length  = 0UL;
-          }
-        }
-        returnObject = jsonString;
-      }
+      case JKEncodeOptionAsString:
+        if(stackBuffer == YES) { if((returnObject = [(id)CFStringCreateWithBytes(      NULL, (const UInt8 *)encodeState->stringBuffer.bytes.ptr, (CFIndex)encodeState->atIndex, kCFStringEncodingUTF8, NO)       autorelease]) == NULL) { jk_encode_error(encodeState, @"Unable to create NSString object"); } }
+        else                   { if((returnObject = [(id)CFStringCreateWithBytesNoCopy(NULL, (const UInt8 *)encodeState->stringBuffer.bytes.ptr, (CFIndex)encodeState->atIndex, kCFStringEncodingUTF8, NO, NULL) autorelease]) == NULL) { jk_encode_error(encodeState, @"Unable to create NSString object"); } }
         break;
 
-      default: jk_encode_error(&encodeState, @"Unknown encode as type."); break;
+      default: jk_encode_error(encodeState, @"Unknown encode as type."); break;
     }
-  }
-  if((error != NULL) && (encodeState.error != NULL)) { *error = encodeState.error; }
 
-  jk_managedBuffer_release(&encodeState.stringBuffer);
-  jk_managedBuffer_release(&encodeState.utf8ConversionBuffer);
+    if((returnObject != NULL) && (stackBuffer == NO)) { encodeState->stringBuffer.flags &= ~JKManagedBufferMustFree; encodeState->stringBuffer.bytes.ptr = NULL; encodeState->stringBuffer.bytes.length = 0UL; }
+  }
+
+errorExit:
+  if((encodeState != NULL) && (error != NULL) && (encodeState->error != NULL)) { *error = encodeState->error; encodeState->error = NULL; }
+  [self releaseState];
 
   return(returnObject);
 }
 
-
-@implementation NSArray (JSONKit)
-
-- (NSData *)JSONData
+- (void)releaseState
 {
-  return([self JSONDataWithOptions:JKSerializeOptionNone error:NULL]);
+  if(encodeState != NULL) {
+    jk_managedBuffer_release(&encodeState->stringBuffer);
+    jk_managedBuffer_release(&encodeState->utf8ConversionBuffer);
+    free(encodeState); encodeState = NULL;
+  }  
 }
 
-- (NSData *)JSONDataWithOptions:(JKSerializeOptionFlags)serializeOptions error:(NSError **)error
+- (void)dealloc
 {
-  return(jk_encode(self, serializeOptions, JKEncodeAsData, error));
-}
-
-- (NSString *)JSONString
-{
-  return([self JSONStringWithOptions:JKSerializeOptionNone error:NULL]);
-}
-
-- (NSString *)JSONStringWithOptions:(JKSerializeOptionFlags)serializeOptions error:(NSError **)error
-{
-  return(jk_encode(self, serializeOptions, JKEncodeAsString, error));
+  [self releaseState];
+  [super dealloc];
 }
 
 @end
 
-@implementation NSDictionary (JSONKit)
+@implementation NSString (JSONKitSerializing)
+
+////////////
+#pragma mark Methods for serializing a single NSString.
+////////////
+
+// Useful for those who need to serialize just a NSString.  Otherwise you would have to do something like [NSArray arrayWithObject:stringToBeJSONSerialized], serializing the array, and then chopping of the extra ^\[.*\]$ square brackets.
+
+- (NSData *)JSONData
+{
+  return([self JSONDataWithOptions:JKSerializeOptionNone includeQuotes:YES error:NULL]);
+}
+
+- (NSData *)JSONDataWithOptions:(JKSerializeOptionFlags)serializeOptions includeQuotes:(BOOL)includeQuotes error:(NSError **)error
+{
+  return([JKSerializer serializeObject:self options:serializeOptions encodeOption:(JKEncodeOptionAsData | ((includeQuotes == NO) ? JKEncodeOptionStringObjTrimQuotes : 0UL) | JKEncodeOptionStringObj) error:error]);
+}
+
+- (NSString *)JSONString
+{
+  return([self JSONStringWithOptions:JKSerializeOptionNone includeQuotes:YES error:NULL]);
+}
+
+- (NSString *)JSONStringWithOptions:(JKSerializeOptionFlags)serializeOptions includeQuotes:(BOOL)includeQuotes error:(NSError **)error
+{
+  return([JKSerializer serializeObject:self options:serializeOptions encodeOption:(JKEncodeOptionAsString | ((includeQuotes == NO) ? JKEncodeOptionStringObjTrimQuotes : 0UL) | JKEncodeOptionStringObj) error:error]);
+}
+
+@end
+
+@implementation NSArray (JSONKitSerializing)
 
 - (NSData *)JSONData
 {
@@ -2924,7 +2960,7 @@ static id jk_encode(void *object, JKSerializeOptionFlags optionFlags, JKEncodeAs
 
 - (NSData *)JSONDataWithOptions:(JKSerializeOptionFlags)serializeOptions error:(NSError **)error
 {
-  return(jk_encode(self, serializeOptions, JKEncodeAsData, error));
+  return([JKSerializer serializeObject:self options:serializeOptions encodeOption:(JKEncodeOptionAsData | JKEncodeOptionCollectionObj) error:error]);
 }
 
 - (NSString *)JSONString
@@ -2934,7 +2970,31 @@ static id jk_encode(void *object, JKSerializeOptionFlags optionFlags, JKEncodeAs
 
 - (NSString *)JSONStringWithOptions:(JKSerializeOptionFlags)serializeOptions error:(NSError **)error
 {
-  return(jk_encode(self, serializeOptions, JKEncodeAsString, error));
+  return([JKSerializer serializeObject:self options:serializeOptions encodeOption:(JKEncodeOptionAsString | JKEncodeOptionCollectionObj) error:error]);
+}
+
+@end
+
+@implementation NSDictionary (JSONKitSerializing)
+
+- (NSData *)JSONData
+{
+  return([self JSONDataWithOptions:JKSerializeOptionNone error:NULL]);
+}
+
+- (NSData *)JSONDataWithOptions:(JKSerializeOptionFlags)serializeOptions error:(NSError **)error
+{
+  return([JKSerializer serializeObject:self options:serializeOptions encodeOption:(JKEncodeOptionAsData | JKEncodeOptionCollectionObj) error:error]);
+}
+
+- (NSString *)JSONString
+{
+  return([self JSONStringWithOptions:JKSerializeOptionNone error:NULL]);
+}
+
+- (NSString *)JSONStringWithOptions:(JKSerializeOptionFlags)serializeOptions error:(NSError **)error
+{
+  return([JKSerializer serializeObject:self options:serializeOptions encodeOption:(JKEncodeOptionAsString | JKEncodeOptionCollectionObj) error:error]);
 }
 
 @end
