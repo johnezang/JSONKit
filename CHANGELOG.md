@@ -1,10 +1,16 @@
 # JSONKit Changelog
 
-## Version 1.4 2011/28/02
+## Version 1.4 2011/23/03
+
+### Highlights
+
+*   JSONKit v1.4 significantly improves the performance of serializing and deserializing.  Deserializing is 23% faster than Apples binary `.plist`, and an amazing 549% faster than Apples binary `.plist` when serializing.
 
 ### New Features
 
 *   JSONKit can now return mutable collection classes.
+*   The `JKSerializeOptionFlags` option `JKSerializeOptionPretty` was implemented.
+*   It is now possible to serialize a single [`NSString`][NSString].  This functionality was requested in issue #4 and issue #11.
 
 ### Deprecated Methods
 
@@ -41,7 +47,7 @@
     &#x200b;- (id)mutableObjectWithData:(NSData *)jsonData error:(NSError **)error;
     </pre>
 
-*   The following methods were added to `NSString (JSONKit)`&ndash;
+*   The following methods were added to `NSString (JSONKitDeserializing)`&ndash;
     
     These methods are the same as their <code>objectFrom&hellip;</code> counterparts except they return mutable collection objects.
     
@@ -51,7 +57,7 @@
     &#x200b;- (id)mutableObjectFromJSONStringWithParseOptions:(JKParseOptionFlags)parseOptionFlags error:(NSError **)error;
     </pre>
 
-*   The following methods were added to `NSData (JSONKit)`&ndash;
+*   The following methods were added to `NSData (JSONKitDeserializing)`&ndash;
     
     These methods are the same as their <code>objectFrom&hellip;</code> counterparts except they return mutable collection objects.
     
@@ -59,6 +65,17 @@
     &#x200b;- (id)mutableObjectFromJSONData;
     &#x200b;- (id)mutableObjectFromJSONDataWithParseOptions:(JKParseOptionFlags)parseOptionFlags;
     &#x200b;- (id)mutableObjectFromJSONDataWithParseOptions:(JKParseOptionFlags)parseOptionFlags error:(NSError **)error;
+    </pre>
+
+*   The following methods were added to `NSString (JSONKitSerializing)`&ndash;
+    
+    These methods are for those uses that need to serialize a single [`NSString`][NSString]&ndash;
+    
+    <pre>
+    &#x200b;- (NSData *)JSONData;
+    &#x200b;- (NSData *)JSONDataWithOptions:(JKSerializeOptionFlags)serializeOptions includeQuotes:(BOOL)includeQuotes error:(NSError **)error;
+    &#x200b;- (NSString *)JSONString;
+    &#x200b;- (NSString *)JSONStringWithOptions:(JKSerializeOptionFlags)serializeOptions includeQuotes:(BOOL)includeQuotes error:(NSError **)error;
     </pre>
     
 ### Bug Fixes
@@ -173,6 +190,7 @@
 *   Removed a lot of internal and private data structures from `JSONKit.h` and put them in `JSONKit.m`.
 *   Modified the way floating point values are serialized.  Previously, the [`printf`][printf] format conversion `%.16g` was used.  This was changed to `%.17g` which should theoretically allow for up to a full `float`, or [IEEE 754 Single 32-bit floating-point][Single Precision], of precision when converting floating point values to decimal representation. 
 *   The usual sundry of inconsequential tidies and what not, such as updating the `README.md`, etc.
+*   The catagory additions to the Cocoa classes were changed from `JSONKit` to `JSONKitDeserializing` and `JSONKitSerializing`, as appropriate.
 
 ## Version 1.3 2011/05/02
 
@@ -262,5 +280,6 @@ No change log information was kept for versions prior to 1.2.
 [-removeObjectForKey:]: http://developer.apple.com/library/mac/documentation/Cocoa/Reference/Foundation/Classes/NSMutableDictionary_Class/Reference/Reference.html#//apple_ref/occ/instm/NSMutableDictionary/removeObjectForKey:
 [NSData]: http://developer.apple.com/mac/library/documentation/Cocoa/Reference/Foundation/Classes/NSData_Class/index.html
 [NSFastEnumeration]: http://developer.apple.com/library/mac/documentation/Cocoa/Reference/NSFastEnumeration_protocol/Reference/NSFastEnumeration.html
+[NSString]: http://developer.apple.com/mac/library/documentation/Cocoa/Reference/Foundation/Classes/NSString_Class/index.html
 [printf]: http://developer.apple.com/library/mac/#documentation/Darwin/Reference/ManPages/man3/printf.3.html
 [memmove]: http://developer.apple.com/library/mac/#documentation/Darwin/Reference/ManPages/man3/memmove.3.html
