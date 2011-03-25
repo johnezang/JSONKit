@@ -122,9 +122,9 @@
     
     <pre>
     &#x200b;- (id)parseUTF8String:(const unsigned char \*)string length:(size_t)length;
-    &#x200b;- (id)parseUTF8String:(const unsigned char \*)string length:(size_t)length error:(NSError **)error;
+    &#x200b;- (id)parseUTF8String:(const unsigned char \*)string length:(size_t)length error:(NSError \*\*)error;
     &#x200b;- (id)parseJSONData:(NSData \*)jsonData;
-    &#x200b;- (id)parseJSONData:(NSData \*)jsonData error:(NSError **)error;
+    &#x200b;- (id)parseJSONData:(NSData \*)jsonData error:(NSError \*\*)error;
     </pre>
     
     The JSONKit v1.4 <code>objectWith&hellip;</code> methods should be used instead.
