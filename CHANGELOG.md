@@ -34,8 +34,8 @@
     **IMPORTANT:** The `^` block MUST return an object with a class that can be serialized by JSONKit, otherwise the serialization will fail.
     
     <pre>
-    &#x200b;- (NSData \*)JSONDataWithOptions:(JKSerializeOptionFlags)serializeOptions serializeUnsupportedClassesUsingBlock:(id(\^)(id object))block error:(NSError \*\*)error;
-    &#x200b;- (NSString \*)JSONStringWithOptions:(JKSerializeOptionFlags)serializeOptions serializeUnsupportedClassesUsingBlock:(id(\^)(id object))block error:(NSError \*\*)error;
+    &#x200b;- (NSData \*)JSONDataWithOptions:(JKSerializeOptionFlags)serializeOptions serializeUnsupportedClassesUsingBlock:(id(&#x005E;)(id object))block error:(NSError \*\*)error;
+    &#x200b;- (NSString \*)JSONStringWithOptions:(JKSerializeOptionFlags)serializeOptions serializeUnsupportedClassesUsingBlock:(id(&#x005E;)(id object))block error:(NSError \*\*)error;
     </pre>
     
     Example using the delegate way:
@@ -90,7 +90,7 @@
       [outputFormatter setDateFormat:@"yyyy-MM-dd'T'HH:mm:ss.SSSZZZ"];
       &#x200b;
       jsonString = [array                 JSONStringWithOptions:encodeOptions
-      &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;serializeUnsupportedClassesUsingBlock:\^id(id object) {
+      &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;serializeUnsupportedClassesUsingBlock:&#x005E;id(id object) {
       &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if([object isKindOfClass:[NSDate class]]) { return([outputFormatter stringFromDate:object]); }
       &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return(NULL);
       &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;}
