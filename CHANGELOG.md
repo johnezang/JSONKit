@@ -8,15 +8,15 @@
 
 *    When `JKSerializeOptionPretty` is enabled, JSONKit now sorts the keys.
 
-*    Normally, JSONKit can only serialize NSNull, NSNumber, NSString, NSArray, and NSDictioonary like objects.  It is now possible to serialize an object of any class via either a delegate or a ^block.
+*    Normally, JSONKit can only serialize NSNull, NSNumber, NSString, NSArray, and NSDictioonary like objects.  It is now possible to serialize an object of any class via either a delegate or a `^` block.
     
-    The delegate or ^block must return an object that can be serialized by JSONKit, however, otherwise JSONKit will fail to serialize the object.  In other words, JSONKit tries to serialize an unsupported class of the object just once, and if the delegate or ^block returns another unsupported class, the second attempt to serialize will fail.  In practice, this is not a problem at all, but it does prevent endless recursive attempts to serialize an unsupported class.
+    The delegate or `^` block must return an object that can be serialized by JSONKit, however, otherwise JSONKit will fail to serialize the object.  In other words, JSONKit tries to serialize an unsupported class of the object just once, and if the delegate or ^block returns another unsupported class, the second attempt to serialize will fail.  In practice, this is not a problem at all, but it does prevent endless recursive attempts to serialize an unsupported class.
     
     This makes it trivial to serialize objects like NSDate or NSData.  A NSDate object can be formatted using a NSDateFormatter to return a ISO-8601 `YYYY-MM-DDTHH:MM:SS.sssZ` type object, for example.  Or a NSData object could be Base64 encoded.
 
     This greatly simplifies things when you have a complex, nested objects with objects that do not belong to the classes that JSONKit can serialize.
 
-    It should be noted that the same caching that JSONKit does for the supported class types also applies to the objects of an unsupported class- if the same object is serialized more than once and the object is still in the serialization cache, JSONKit will copy the previous serialization result instead of invoking the delegate or ^block again.  Therefore, you should not expect or depend on your delegate or block being called each time the same object needs to be serialized AND the delegate or block MUST return a "formatted object" that is STRICTLY invariant (that is to say the same object must always return the exact same formatted output).
+    It should be noted that the same caching that JSONKit does for the supported class types also applies to the objects of an unsupported class- if the same object is serialized more than once and the object is still in the serialization cache, JSONKit will copy the previous serialization result instead of invoking the delegate or `^` block again.  Therefore, you should not expect or depend on your delegate or block being called each time the same object needs to be serialized AND the delegate or block MUST return a "formatted object" that is STRICTLY invariant (that is to say the same object must always return the exact same formatted output).
     
     To serialize NSArray or NSDictionary objects using a delegate&ndash;
     
