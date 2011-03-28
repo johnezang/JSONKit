@@ -6,8 +6,8 @@ JSONKit is licensed under the terms of the BSD License.  Copyright &copy; 2011, 
 
 <table>
 <tr><th>Parsing</th><th>Serializing</th></tr>
-<tr><td><img src="http://chart.googleapis.com/chart?chf=a,s,000000|b0,lg,0,6589C760,0,6589C7B4,1|bg,lg,90,EFEFEF,0,F7F7F7,1&chxl=0:|TouchJSON|XML+.plist|json-framework|YAJL-ObjC|gzip+JSONKit|Binary+.plist|JSONKit|2:|Time+to+Deserialize+in+%C2%B5sec&chxp=2,40&chxr=0,0,5|1,0,3250&chxs=0,676767,11.5,1,lt,676767&chxt=y,x,x&chbh=a,5,4&chs=350x185&cht=bhs&chco=6589C783&chds=0,3250&chd=t:410.517,510.262,539.614,1351.257,1683.346,1747.953,2955.881&chg=-1,0,1,3&chm=N+*s*+%C2%B5s,676767,0,0:5,10.5|N+*s*+%C2%B5s,3d3d3d,0,6,10.5,,r:-5:1&chem=y;s=text_outline;d=666,10.5,l,fff,_,Decompress+%2b+Parse+is+just;ds=0;dp=2;py=0;of=58,7|y;s=text_outline;d=666,10.5,l,fff,_,5.6%25+slower+than+Binary+.plist%21;ds=0;dp=2;py=0;of=53,-5" width="350" height="185" alt="Deserialize from JSON" /></td>
-<td><img src="http://chart.googleapis.com/chart?chf=a,s,000000|b0,lg,0,699E7260,0,699E72B4,1|bg,lg,90,EFEFEF,0,F7F7F7,1&chxl=0:|TouchJSON|YAJL-ObjC|XML+.plist|json-framework|Binary+.plist|gzip+JSONKit|JSONKit|2:|Time+to+Serialize+in+%C2%B5sec&chxp=2,40&chxr=0,0,5|1,0,3250&chxs=0,676767,11.5,1,lt,676767&chxt=y,x,x&chbh=a,5,4&chs=350x175&cht=bhs&chco=699E7284&chds=0,3250&chd=t:96.387,466.947,626.153,1028.432,1945.511,2156.978,3051.976&chg=-1,0,1,3&chm=N+*s*+%C2%B5s,676767,0,0:5,10.5|N+*s*+%C2%B5s,4d4d4d,0,6,10.5,,r:-5:1&chem=y;s=text_outline;d=666,10.5,l,fff,_,Serialize+%2b+Compress+is+34%25;ds=0;dp=1;py=0;of=51,7|y;s=text_outline;d=666,10.5,l,fff,_,faster+than+Binary+.plist%21;ds=0;dp=1;py=0;of=62,-5" width="350" height="185" alt="Serialize to JSON" /></td></tr>
+<tr><td><img src="http://chart.googleapis.com/chart?chf=a,s,000000|b0,lg,0,6589C760,0,6589C7B4,1|bg,lg,90,EFEFEF,0,F8F8F8,1&chxl=0:|TouchJSON|XML+.plist|json-framework|YAJL-ObjC|gzip+JSONKit|Binary+.plist|JSONKit|2:|Time+to+Deserialize+in+%C2%B5sec&chxp=2,40&chxr=0,0,5|1,0,3250&chxs=0,676767,11.5,1,lt,676767&chxt=y,x,x&chbh=a,5,4&chs=350x185&cht=bhs&chco=6589C783&chds=0,3250&chd=t:410.517,510.262,539.614,1351.257,1683.346,1747.953,2955.881&chg=-1,0,1,3&chm=N+*s*+%C2%B5s,676767,0,0:5,10.5|N+*s*+%C2%B5s,3d3d3d,0,6,10.5,,r:-5:1&chem=y;s=text_outline;d=666,10.5,l,fff,_,Decompress+%2b+Parse+is+just;ds=0;dp=2;py=0;of=58,7|y;s=text_outline;d=666,10.5,l,fff,_,5.6%25+slower+than+Binary+.plist%21;ds=0;dp=2;py=0;of=53,-5" width="350" height="185" alt="Deserialize from JSON" /></td>
+<td><img src="http://chart.googleapis.com/chart?chf=a,s,000000|b0,lg,0,699E7260,0,699E72B4,1|bg,lg,90,EFEFEF,0,F8F8F8,1&chxl=0:|TouchJSON|YAJL-ObjC|XML+.plist|json-framework|Binary+.plist|gzip+JSONKit|JSONKit|2:|Time+to+Serialize+in+%C2%B5sec&chxp=2,40&chxr=0,0,5|1,0,3250&chxs=0,676767,11.5,1,lt,676767&chxt=y,x,x&chbh=a,5,4&chs=350x175&cht=bhs&chco=699E7284&chds=0,3250&chd=t:96.387,466.947,626.153,1028.432,1945.511,2156.978,3051.976&chg=-1,0,1,3&chm=N+*s*+%C2%B5s,676767,0,0:5,10.5|N+*s*+%C2%B5s,4d4d4d,0,6,10.5,,r:-5:1&chem=y;s=text_outline;d=666,10.5,l,fff,_,Serialize+%2b+Compress+is+34%25;ds=0;dp=1;py=0;of=51,7|y;s=text_outline;d=666,10.5,l,fff,_,faster+than+Binary+.plist%21;ds=0;dp=1;py=0;of=62,-5" width="350" height="185" alt="Serialize to JSON" /></td></tr>
 <tr><td align=center><em>23% Faster than Binary</em> <code><em>.plist</em></code><em>&thinsp;!</em></td><td align=center><em>549% Faster than Binary</em> <code><em>.plist</em></code><em>&thinsp;!</em></td></tr>
 </table>
 
@@ -91,9 +91,21 @@ The key words "MUST", "MUST NOT", "REQUIRED", "SHALL", "SHALL NOT", "SHOULD", "S
 
 ### Objective-C To JSON Primitive Mapping Details
 
-*   JSONKit will fail with an error if it encounters an object that is not a [`NSNull`][NSNull], [`NSNumber`][NSNumber], [`NSString`][NSString], [`NSArray`][NSArray], or [`NSDictionary`][NSDictionary] class object during serialization.  More specifically, JSONKit will fail with an error if it encounters an object where [`-isKindOfClass:`][-isKindOfClass:] returns `NO` for all of the previously mentioned classes.
+*    When serializing, the top level container, and all of its children, are required to be *strictly* [invariant][wiki_invariant] during enumeration.  This property is used to make certain optimizations, such as if a particular object has already been serialized, the result of the previous serialized `UTF8` string can be reused (i.e., the `UTF8` string of the previous serialization can simply be copied instead of performing all the serialization work again).  While this is probably only of interest to those who are doing extraordinarily unusual things with the run-time or custom classes inheriting from the classes that JSONKit will serialize (i.e, a custom object whose value mutates each time the it receives a message requesting its value for serialization), it also covers the case where any of the objects to be serialized are mutated during enumeration (i.e., mutated by another thread).  The number of times JSONKit will request an objects value is non-deterministic, from a minimum of once up to the number of times it appears in the serialized JSON&ndash; therefore an object MUST NOT depend on receiving a message requesting its value each time it appears in the serialized output. The behavior is `undefined` if these requirements are violated.
 
-*   The [`NSDictionary`][NSDictionary] class allows for any object, which can be of any class, to be used as a `key`.  JSON, however, only permits Strings to be used as `keys`. Therefore JSONKit will fail with an error if it encounters a [`NSDictionary`][NSDictionary] that contains keys that are not [`NSString`][NSString] objects during serialization.  More specifically, the keys must return `YES` when sent [`-isKindOfClass:[NSString class]`][-isKindOfClass:].
+*   The objects to be serialized MUST be acyclic.  If the objects to be serialized contain circular references the behavior is `undefined`.  For example,
+
+    <pre>[arrayOne addObject:arrayTwo];
+    [arrayTwo addObject:arrayOne];
+    id json = [arrayOne JSONString];</pre>
+    
+    &hellip; will result in `undefined` behavior.
+
+*   The contents of [`NSString`][NSString] objects are encoded as `UTF8` and added to the serialized JSON.  JSONKit assumes that [`NSString`][NSString] produces well-formed `UTF8` Unicode and does no additional validation of the conversion.  When `JKSerializeOptionEscapeUnicode` is enabled, JSONKit will encode Unicode code points that can be encoded as a single `UTF16` code unit as <code>\u<i>XXXX</i></code>, and will encode Unicode code points that require `UTF16` surrogate pairs as <code>\u<i>high</i>\u<i>low</i></code>.  While JSONKit makes every effort to serialize the contents of a [`NSString`][NSString] object exactly, modulo any [RFC 4627][] requirements, the [`NSString`][NSString] class uses the [Unicode Standard][] as its basis for representing strings.  You should be aware that the [Unicode Standard][] defines [string equivalence][Unicode_equivalence] in a such a way that two strings that compare equal are not required to be bit for bit identical.  Therefore there exists the possibility that [`NSString`][NSString] may mutate a string in such a way that it is [Unicode equivalent][Unicode_equivalence], but not bit for bit identical with the original string. 
+
+*   The [`NSDictionary`][NSDictionary] class allows for any object, which can be of any class, to be used as a `key`.  JSON, however, only permits Strings to be used as `keys`. Therefore JSONKit will fail with an error if it encounters a [`NSDictionary`][NSDictionary] that contains keys that are not [`NSString`][NSString] objects during serialization.  More specifically, the keys must return `YES` when sent [`-isKindOfClass:[NSString class]`][-isKindOfClass:]. 
+
+*   JSONKit will fail with an error if it encounters an object that is not a [`NSNull`][NSNull], [`NSNumber`][NSNumber], [`NSString`][NSString], [`NSArray`][NSArray], or [`NSDictionary`][NSDictionary] class object during serialization.  More specifically, JSONKit will fail with an error if it encounters an object where [`-isKindOfClass:`][-isKindOfClass:] returns `NO` for all of the previously mentioned classes.
 
 *   JSON does not allow for Numbers that are <code>&plusmn;Infinity</code> or <code>&plusmn;NaN</code>.  Therefore JSONKit will fail with an error if it encounters a [`NSNumber`][NSNumber] that contains such a value during serialization.
 
@@ -105,7 +117,6 @@ The key words "MUST", "MUST NOT", "REQUIRED", "SHALL", "SHALL NOT", "SHOULD", "S
     
     Floating-point numbers are converted to their decimal representation using the [`printf`][printf] format conversion specifier `%.17g`.  Theoretically this allows up to a `float`, or [IEEE 754 Single 32-bit floating-point][Single Precision], worth of precision to be represented.  This means that for practical purposes, `double` values are converted to `float` values with the associated loss of precision.  The [RFC 4627][] standard is silent on how floating-point numbers should be dealt with and the author has found that real world JSON implementations vary wildly in how they handle this issue.  Furthermore, the `%g` format conversion specifier may convert floating-point values that can be exactly represented as an integer to a textual representation that does not include a `.` or `e`&ndash; essentially silently promoting a floating-point value to an integer value (i.e, `5.0` becomes `5`).  Because of these and many other issues surrounding the conversion and manipulation of floating-point values, you should not expect or depend on floating point values to maintain their full precision, or when round tripped, to compare equal.
 
-*    When serializing, the top level container, and all of its children, are required to be *strictly* [invariant][wiki_invariant] during enumeration.  This property is used to make certain optimizations, such as if a particular object has already been serialized, the result of the previous serialization can be reused (i.e., the text of the previous serialization can simply be copied instead of performing all the serialization work again).  While this is probably only applicable to those who are doing extraordinarily unusual things with the run-time or custom classes inheriting from the classes that JSONKit will serialize, it does cover the cases where any of the objects are mutated during enumeration (i.e., mutated by another thread).  The behavior is `undefined` if this requirement is violated.
 
 ### Reporting Bugs
 
@@ -192,12 +203,21 @@ The <code>objectWith&hellip;</code> methods return immutable collection objects 
   <tr><td><code>JKParseOptionComments</code></td><td>Allow C style <code>//</code> and <code>/* &hellip; */</code> comments in JSON.  This is a fairly common extension to JSON, but JSON that contains C style comments is not strictly conforming JSON.</td></tr>
   <tr><td><code>JKParseOptionUnicodeNewlines</code></td><td>Allow Unicode recommended <code>(?:\r\n|[\n\v\f\r\x85\p{Zl}\p{Zp}])</code> newlines in JSON.  The <a href="http://tools.ietf.org/html/rfc4627">JSON specification</a> only allows the newline characters <code>\r</code> and <code>\n</code>, but this option allows JSON that contains the <a href="http://en.wikipedia.org/wiki/Newline#Unicode">Unicode recommended newline characters</a> to be parsed.  JSON that contains these additional newline characters is not strictly conforming JSON.</td></tr>
   <tr><td><code>JKParseOptionLooseUnicode</code></td><td>Normally the decoder will stop with an error at any malformed Unicode. This option allows JSON with malformed Unicode to be parsed without reporting an error. Any malformed Unicode is replaced with <code>\uFFFD</code>, or <code>REPLACEMENT CHARACTER</code>, as specified in <a href="http://www.unicode.org/versions/Unicode6.0.0/ch03.pdf">The Unicode 6.0 standard, Chapter 3</a>, section 3.9 <em>Unicode Encoding Forms</em>.</td></tr>
-  <tr><td><code>JKParseOptionPermitTextAfterValidJSON</code></td><td>Normally, <code>white-space</code> that follows the JSON is interpreted as a parsing failure. This option allows for any trailing <code>white-space</code> to be ignored and not cause a parsing error.</td></tr>
+  <tr><td><code>JKParseOptionPermitTextAfterValidJSON</code></td><td>Normally, <code>non-white-space</code> that follows the JSON is interpreted as a parsing failure. This option allows for any trailing <code>non-white-space</code> to be ignored and not cause a parsing error.</td></tr>
 </table>
 
 ### Serializing Interface
 
-**Note:** The bytes contained in the returned [`NSData`][NSData] object is `UTF8` encoded.
+The serializing interface includes [`NSString`][NSString] convenience methods for those that need to serialize a single [`NSString`][NSString].  For those that need this functionality, the [`NSString`][NSString] additions are much more convenient than having to wrap a single [`NSString`][NSString] in a [`NSArray`][NSArray], which then requires stripping the unneeded `[`&hellip;`]` characters from the serialized JSON result.  When serializing a single [`NSString`][NSString], you can control whether or not the serialized JSON result is surrounded by quotation marks using the `includeQuotes:` argument:
+
+<table>
+<tr><th>Example</th><th>Result</th><th>Argument</th></tr>
+<tr><td><code>a "test"...</code></td><td><code>"a \"test\"..."</code></td><td><code>includeQuotes:YES</code></td></tr>
+<tr><td><code>a "test"...</code></td><td><code>a \"test\"...</code></td><td><code>includeQuotes:NO</code></td></tr>
+</table>
+
+**Note:** The [`NSString`][NSString] methods that do not include a `includeQuotes:` argument behave as if invoked with `includeQuotes:YES`.  
+**Note:** The bytes contained in the returned [`NSData`][NSData] object are `UTF8` encoded.
 
 #### NSArray and NSDictionary Interface
 
@@ -205,6 +225,13 @@ The <code>objectWith&hellip;</code> methods return immutable collection objects 
 - (NSData *)JSONDataWithOptions:(JKSerializeOptionFlags)serializeOptions error:(NSError **)error;
 - (NSString *)JSONString;
 - (NSString *)JSONStringWithOptions:(JKSerializeOptionFlags)serializeOptions error:(NSError **)error;</pre>
+
+#### NSString Interface
+
+<pre>- (NSData *)JSONData;
+- (NSData *)JSONDataWithOptions:(JKSerializeOptionFlags)serializeOptions includeQuotes:(BOOL)includeQuotes error:(NSError **)error;
+- (NSString *)JSONString;
+- (NSString *)JSONStringWithOptions:(JKSerializeOptionFlags)serializeOptions includeQuotes:(BOOL)includeQuotes error:(NSError **)error;</pre>
 
 #### JKSerializeOptionFlags
 
