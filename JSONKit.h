@@ -1,7 +1,6 @@
 //
 //  JSONKit.h
 //  http://github.com/johnezang/JSONKit
-//  http://github.com/johnezang/JSONKit
 //  Dual licensed under either the terms of the BSD License, or alternatively
 //  under the terms of the Apache License, Version 2.0, as specified below.
 //
