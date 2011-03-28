@@ -966,7 +966,7 @@ static void _JKDictionaryAddObject(JKDictionary *dictionary, NSUInteger keyHash,
 
 static JKHashTableEntry *_JKDictionaryHashTableEntryForKey(JKDictionary *dictionary, id aKey) {
   NSCParameterAssert((dictionary != NULL) && (dictionary->entry != NULL) && (dictionary->count <= dictionary->capacity));
-  if(aKey == NULL) { return(NULL); }
+  if((aKey == NULL) || (dictionary->capacity == 0UL)) { return(NULL); }
   NSUInteger        keyHash = CFHash(aKey), keyEntry = (keyHash % dictionary->capacity), idx = 0UL;
   JKHashTableEntry *atEntry = NULL;
   for(idx = 0UL; idx < dictionary->capacity; idx++) {
@@ -2525,6 +2525,7 @@ static int jk_encode_add_atom_to_buffer(JKEncodeState *encodeState, void *object
     return(0);
   }
 
+#if 0
   // When we encounter a class that we do not handle, and we have either a delegate or block that the user supplied to format unsupported classes,
   // we "re-run" the object check.  However, we re-run the object check exactly ONCE.  If the user supplies an object that isn't one of the
   // supported classes, we fail the second type (i.e., double fault error).
@@ -2552,7 +2553,39 @@ rerunAfterClassFormatter:
       else { jk_encode_error(encodeState, @"Unable to serialize object class %@ that was returned by the unsupported class formatter.  Original object class was %@.", (object == NULL) ? @"NULL" : NSStringFromClass([object class]), NSStringFromClass([encodeCacheObject class])); return(1); }
     }
   }
+#else
 
+  // When we encounter a class that we do not handle, and we have either a delegate or block that the user supplied to format unsupported classes,
+  // we "re-run" the object check.  However, we re-run the object check exactly ONCE.  If the user supplies an object that isn't one of the
+  // supported classes, we fail the second type (i.e., double fault error).
+  //BOOL rerunningAfterClassFormatter = NO;
+//rerunAfterClassFormatter:
+
+  if(
+#ifdef __BLOCKS__
+     ((encodeState->classFormatterBlock) && ((object = encodeState->classFormatterBlock(object))                                                                         == NULL)) ||
+#endif
+     ((encodeState->classFormatterIMP)   && ((object = encodeState->classFormatterIMP(encodeState->classFormatterDelegate, encodeState->classFormatterSelector, object)) == NULL))    ) { goto formatterError; }
+  
+       if(JK_EXPECT_T(object->isa == encodeState->fastClassLookup.stringClass))     { isClass = JKClassString;     }
+  else if(JK_EXPECT_T(object->isa == encodeState->fastClassLookup.numberClass))     { isClass = JKClassNumber;     }
+  else if(JK_EXPECT_T(object->isa == encodeState->fastClassLookup.dictionaryClass)) { isClass = JKClassDictionary; }
+  else if(JK_EXPECT_T(object->isa == encodeState->fastClassLookup.arrayClass))      { isClass = JKClassArray;      }
+  else if(JK_EXPECT_T(object->isa == encodeState->fastClassLookup.nullClass))       { isClass = JKClassNull;       }
+  else {
+         if(JK_EXPECT_T([object isKindOfClass:[NSString     class]])) { encodeState->fastClassLookup.stringClass     = object->isa; isClass = JKClassString;     }
+    else if(JK_EXPECT_T([object isKindOfClass:[NSNumber     class]])) { encodeState->fastClassLookup.numberClass     = object->isa; isClass = JKClassNumber;     }
+    else if(JK_EXPECT_T([object isKindOfClass:[NSDictionary class]])) { encodeState->fastClassLookup.dictionaryClass = object->isa; isClass = JKClassDictionary; }
+    else if(JK_EXPECT_T([object isKindOfClass:[NSArray      class]])) { encodeState->fastClassLookup.arrayClass      = object->isa; isClass = JKClassArray;      }
+    else if(JK_EXPECT_T([object isKindOfClass:[NSNull       class]])) { encodeState->fastClassLookup.nullClass       = object->isa; isClass = JKClassNull;       }
+    else {
+    formatterError:
+      if(object == encodeCacheObject) { jk_encode_error(encodeState, @"Unable to serialize object class %@.", NSStringFromClass([encodeCacheObject class])); return(1); }
+      else { jk_encode_error(encodeState, @"Unable to serialize object class %@ that was returned by the unsupported class formatter.  Original object class was %@.", (object == NULL) ? @"NULL" : NSStringFromClass([object class]), NSStringFromClass([encodeCacheObject class])); return(1); }
+    }
+  }
+  
+#endif
   // This is here for the benefit of the optimizer.  It allows the optimizer to do loop invariant code motion for the JKClassArray
   // and JKClassDictionary cases when printing simple, single characters via jk_encode_write(), which is actually a macro:
   // #define jk_encode_write1(es, dc, f) (_jk_encode_prettyPrint ? jk_encode_write1slow(es, dc, f) : jk_encode_write1fast(es, dc, f))
@@ -2771,7 +2804,7 @@ rerunAfterClassFormatter:
   id returnObject = NULL;
 
   if(encodeState != NULL) { [self releaseState]; }
-  if((encodeState = (struct JKEncodeState *)calloc(1UL, sizeof(JKEncodeState))) == NULL) { [NSException exceptionWithName:NSMallocException reason:@"Unable to allocate state structure." userInfo:NULL]; }
+  if((encodeState = (struct JKEncodeState *)calloc(1UL, sizeof(JKEncodeState))) == NULL) { [NSException exceptionWithName:NSMallocException reason:@"Unable to allocate state structure." userInfo:NULL]; return(NULL); }
 
   if((error != NULL) && (*error != NULL)) { *error = NULL; }
 
@@ -2791,7 +2824,7 @@ rerunAfterClassFormatter:
   encodeState->encodeOption                                 = encodeOption;
   encodeState->stringBuffer.roundSizeUpToMultipleOf         = (1024UL * 32UL);
   encodeState->utf8ConversionBuffer.roundSizeUpToMultipleOf = 4096UL;
-
+    
   unsigned char stackJSONBuffer[JK_JSONBUFFER_SIZE] JK_ALIGNED(64);
   jk_managedBuffer_setToStackBuffer(&encodeState->stringBuffer,         stackJSONBuffer, sizeof(stackJSONBuffer));
 
