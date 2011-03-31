@@ -1,5 +1,109 @@
 # JSONKit Changelog
 
+## Version 1.X ????/??/??
+
+**IMPORTANT:** The following changelog notes are a work in progress.  They apply to the work done on JSONKit post v1.4.  Since JSONKit itself is inbetween versions, these changelog notes are subject to change, may be wrong, and just about everything else you could expect at this point in development.
+
+### New Features
+
+*    When `JKSerializeOptionPretty` is enabled, JSONKit now sorts the keys.
+
+*    Normally, JSONKit can only serialize NSNull, NSNumber, NSString, NSArray, and NSDictioonary like objects.  It is now possible to serialize an object of any class via either a delegate or a `^` block.
+    
+    The delegate or `^` block must return an object that can be serialized by JSONKit, however, otherwise JSONKit will fail to serialize the object.  In other words, JSONKit tries to serialize an unsupported class of the object just once, and if the delegate or ^block returns another unsupported class, the second attempt to serialize will fail.  In practice, this is not a problem at all, but it does prevent endless recursive attempts to serialize an unsupported class.
+    
+    This makes it trivial to serialize objects like NSDate or NSData.  A NSDate object can be formatted using a NSDateFormatter to return a ISO-8601 `YYYY-MM-DDTHH:MM:SS.sssZ` type object, for example.  Or a NSData object could be Base64 encoded.
+
+    This greatly simplifies things when you have a complex, nested objects with objects that do not belong to the classes that JSONKit can serialize.
+
+    It should be noted that the same caching that JSONKit does for the supported class types also applies to the objects of an unsupported class- if the same object is serialized more than once and the object is still in the serialization cache, JSONKit will copy the previous serialization result instead of invoking the delegate or `^` block again.  Therefore, you should not expect or depend on your delegate or block being called each time the same object needs to be serialized AND the delegate or block MUST return a "formatted object" that is STRICTLY invariant (that is to say the same object must always return the exact same formatted output).
+    
+    To serialize NSArray or NSDictionary objects using a delegate&ndash;
+    
+    **NOTE:** The delegate is based a single argument, the object with the unsupported class, and the supplied `selector` method must be one that accepts a single `id` type argument (i.e., `formatObject:`).  
+    **IMPORTANT:** The `^` block MUST return an object with a class that can be serialized by JSONKit, otherwise the serialization will fail.
+    
+    <pre>
+    &#x200b;- (NSData \*)JSONDataWithOptions:(JKSerializeOptionFlags)serializeOptions serializeUnsupportedClassesUsingDelegate:(id)delegate selector:(SEL)selector error:(NSError \*\*)error;
+    &#x200b;- (NSString \*)JSONStringWithOptions:(JKSerializeOptionFlags)serializeOptions serializeUnsupportedClassesUsingDelegate:(id)delegate selector:(SEL)selector error:(NSError \*\*)error;
+    </pre>
+    
+    To serialize NSArray or NSDictionary objects using a `^` block&ndash;
+    
+    **NOTE:** The block is passed a single argument, the object with the unsupported class.  
+    **IMPORTANT:** The `^` block MUST return an object with a class that can be serialized by JSONKit, otherwise the serialization will fail.
+    
+    <pre>
+    &#x200b;- (NSData \*)JSONDataWithOptions:(JKSerializeOptionFlags)serializeOptions serializeUnsupportedClassesUsingBlock:(id(&#x005E;)(id object))block error:(NSError \*\*)error;
+    &#x200b;- (NSString \*)JSONStringWithOptions:(JKSerializeOptionFlags)serializeOptions serializeUnsupportedClassesUsingBlock:(id(&#x005E;)(id object))block error:(NSError \*\*)error;
+    </pre>
+    
+    Example using the delegate way:
+    
+    <pre>
+    @interface MYFormatter : NSObject {
+      NSDateFormatter \*outputFormatter;
+    }
+    @end
+    &#x200b;
+    @implementation MYFormatter
+    -(id)init
+    {
+      if((self = [super init]) == NULL) { return(NULL); }
+      if((outputFormatter = [[NSDateFormatter alloc] init]) == NULL) { [self autorelease]; return(NULL); }
+      [outputFormatter setDateFormat:@"yyyy-MM-dd'T'HH:mm:ss.SSSZZZ"];
+      return(self);
+    }
+    &#x200b;
+    -(void)dealloc
+    {
+      if(outputFormatter != NULL) { [outputFormatter release]; outputFormatter = NULL; }
+      [super dealloc];
+    }
+    &#x200b;
+    -(id)formatObject:(id)object
+    {
+      if([object isKindOfClass:[NSDate class]]) { return([outputFormatter stringFromDate:object]); }
+      return(NULL);
+    }
+    @end
+    &#x200b;
+    {
+      MYFormatter \*myFormatter = [[[MYFormatter alloc] init] autorelease];
+      NSArray \*array = [NSArray arrayWithObject:[NSDate dateWithTimeIntervalSinceNow:0.0]];
+
+      NSString \*jsonString = NULL;
+      jsonString = [array                    JSONStringWithOptions:JKSerializeOptionNone
+      &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;serializeUnsupportedClassesUsingDelegate:myFormatter
+      &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;selector:@selector(formatObject:)
+      &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;error:NULL];
+      NSLog(@"jsonString: '%@'", jsonString);
+      // 2011-03-25 11:42:16.175 formatter_example[59120:903] jsonString: '["2011-03-25T11:42:16.175-0400"]'
+    }
+    </pre>
+    
+    Example using the `^` block way:
+    
+    <pre>
+    {
+      NSDateFormatter \*outputFormatter = [[[NSDateFormatter alloc] init] autorelease];
+      [outputFormatter setDateFormat:@"yyyy-MM-dd'T'HH:mm:ss.SSSZZZ"];
+      &#x200b;
+      jsonString = [array                 JSONStringWithOptions:encodeOptions
+      &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;serializeUnsupportedClassesUsingBlock:&#x005E;id(id object) {
+      &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if([object isKindOfClass:[NSDate class]]) { return([outputFormatter stringFromDate:object]); }
+      &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return(NULL);
+      &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;}
+      &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;error:NULL];
+      NSLog(@"jsonString: '%@'", jsonString);
+      // 2011-03-25 11:49:56.434 json_parse[59167:903] jsonString: '["2011-03-25T11:49:56.434-0400"]'
+    }
+    </pre>
+
+### Major Changes
+
+*   The way that JSONKit implements the collection classes was modified.  Specifically, JSONKit now follows the same strategy that the Cocoa collection classes use, which is to have a single subclass of the mutable collection class.  This concrete subclass has an ivar bit that determines whether or not that instance is mutable, and when an immutable instance receives a mutating message, it throws an exception.
+
 ## Version 1.4 2011/23/03
 
 ### Highlights
@@ -17,10 +121,10 @@
 *   The following `JSONDecoder` methods are deprecated beginning with JSONKit v1.4 and will be removed in a later release&ndash;
     
     <pre>
-    &#x200b;- (id)parseUTF8String:(const unsigned char *)string length:(size_t)length;
-    &#x200b;- (id)parseUTF8String:(const unsigned char *)string length:(size_t)length error:(NSError **)error;
-    &#x200b;- (id)parseJSONData:(NSData *)jsonData;
-    &#x200b;- (id)parseJSONData:(NSData *)jsonData error:(NSError **)error;
+    &#x200b;- (id)parseUTF8String:(const unsigned char \*)string length:(size_t)length;
+    &#x200b;- (id)parseUTF8String:(const unsigned char \*)string length:(size_t)length error:(NSError \*\*)error;
+    &#x200b;- (id)parseJSONData:(NSData \*)jsonData;
+    &#x200b;- (id)parseJSONData:(NSData \*)jsonData error:(NSError \*\*)error;
     </pre>
     
     The JSONKit v1.4 <code>objectWith&hellip;</code> methods should be used instead.
@@ -32,19 +136,19 @@
     These methods replace their deprecated <code>parse&hellip;</code> counterparts and return immutable collection objects.
     
     <pre>
-    &#x200b;- (id)objectWithUTF8String:(const unsigned char *)string length:(NSUInteger)length;
-    &#x200b;- (id)objectWithUTF8String:(const unsigned char *)string length:(NSUInteger)length error:(NSError **)error;
-    &#x200b;- (id)objectWithData:(NSData *)jsonData;
-    &#x200b;- (id)objectWithData:(NSData *)jsonData error:(NSError **)error;
+    &#x200b;- (id)objectWithUTF8String:(const unsigned char \*)string length:(NSUInteger)length;
+    &#x200b;- (id)objectWithUTF8String:(const unsigned char \*)string length:(NSUInteger)length error:(NSError \*\*)error;
+    &#x200b;- (id)objectWithData:(NSData \*)jsonData;
+    &#x200b;- (id)objectWithData:(NSData \*)jsonData error:(NSError \*\*)error;
     </pre>
     
     These methods are the same as their <code>objectWith&hellip;</code> counterparts except they return mutable collection objects.
     
     <pre>
-    &#x200b;- (id)mutableObjectWithUTF8String:(const unsigned char *)string length:(NSUInteger)length;
-    &#x200b;- (id)mutableObjectWithUTF8String:(const unsigned char *)string length:(NSUInteger)length error:(NSError **)error;
-    &#x200b;- (id)mutableObjectWithData:(NSData *)jsonData;
-    &#x200b;- (id)mutableObjectWithData:(NSData *)jsonData error:(NSError **)error;
+    &#x200b;- (id)mutableObjectWithUTF8String:(const unsigned char \*)string length:(NSUInteger)length;
+    &#x200b;- (id)mutableObjectWithUTF8String:(const unsigned char \*)string length:(NSUInteger)length error:(NSError \*\*)error;
+    &#x200b;- (id)mutableObjectWithData:(NSData \*)jsonData;
+    &#x200b;- (id)mutableObjectWithData:(NSData \*)jsonData error:(NSError \*\*)error;
     </pre>
 
 *   The following methods were added to `NSString (JSONKitDeserializing)`&ndash;
@@ -54,7 +158,7 @@
     <pre>
     &#x200b;- (id)mutableObjectFromJSONString;
     &#x200b;- (id)mutableObjectFromJSONStringWithParseOptions:(JKParseOptionFlags)parseOptionFlags;
-    &#x200b;- (id)mutableObjectFromJSONStringWithParseOptions:(JKParseOptionFlags)parseOptionFlags error:(NSError **)error;
+    &#x200b;- (id)mutableObjectFromJSONStringWithParseOptions:(JKParseOptionFlags)parseOptionFlags error:(NSError \*\*)error;
     </pre>
 
 *   The following methods were added to `NSData (JSONKitDeserializing)`&ndash;
@@ -64,7 +168,7 @@
     <pre>
     &#x200b;- (id)mutableObjectFromJSONData;
     &#x200b;- (id)mutableObjectFromJSONDataWithParseOptions:(JKParseOptionFlags)parseOptionFlags;
-    &#x200b;- (id)mutableObjectFromJSONDataWithParseOptions:(JKParseOptionFlags)parseOptionFlags error:(NSError **)error;
+    &#x200b;- (id)mutableObjectFromJSONDataWithParseOptions:(JKParseOptionFlags)parseOptionFlags error:(NSError \*\*)error;
     </pre>
 
 *   The following methods were added to `NSString (JSONKitSerializing)`&ndash;
@@ -72,10 +176,10 @@
     These methods are for those uses that need to serialize a single [`NSString`][NSString]&ndash;
     
     <pre>
-    &#x200b;- (NSData *)JSONData;
-    &#x200b;- (NSData *)JSONDataWithOptions:(JKSerializeOptionFlags)serializeOptions includeQuotes:(BOOL)includeQuotes error:(NSError **)error;
-    &#x200b;- (NSString *)JSONString;
-    &#x200b;- (NSString *)JSONStringWithOptions:(JKSerializeOptionFlags)serializeOptions includeQuotes:(BOOL)includeQuotes error:(NSError **)error;
+    &#x200b;- (NSData \*)JSONData;
+    &#x200b;- (NSData \*)JSONDataWithOptions:(JKSerializeOptionFlags)serializeOptions includeQuotes:(BOOL)includeQuotes error:(NSError \*\*)error;
+    &#x200b;- (NSString \*)JSONString;
+    &#x200b;- (NSString \*)JSONStringWithOptions:(JKSerializeOptionFlags)serializeOptions includeQuotes:(BOOL)includeQuotes error:(NSError \*\*)error;
     </pre>
     
 ### Bug Fixes
