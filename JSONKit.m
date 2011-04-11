@@ -2710,7 +2710,7 @@ rerunAfterClassFormatter:
         return(jk_encode_write1(encodeState, -1L, "]"));
       }
       break;
-nsa
+
     case JKClassDictionary:
       {
         int     printComma      = 0;
