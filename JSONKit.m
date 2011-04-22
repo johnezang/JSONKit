@@ -937,11 +937,30 @@ static NSUInteger _JKDictionaryCapacity(JKDictionary *dictionary) {
 }
 
 static void _JKDictionaryRemoveObjectWithEntry(JKDictionary *dictionary, JKHashTableEntry *entry) {
-  NSCParameterAssert((dictionary != NULL) && (entry != NULL) && (entry->key != NULL) && (entry->object != NULL) && (dictionary->count > 0UL));
+  NSCParameterAssert((dictionary != NULL) && (entry != NULL) && (entry->key != NULL) && (entry->object != NULL) && (dictionary->count > 0UL) && (dictionary->count <= dictionary->capacity));
   CFRelease(entry->key);    entry->key    = NULL;
   CFRelease(entry->object); entry->object = NULL;
   entry->keyHash = 0UL;
   dictionary->count--;
+  // In order for certain invariants that are used to speed up the search for a particular key, we need to "re-add" all the entries in the hash table following this entry until we hit a NULL entry.
+  NSUInteger removeIdx = entry - dictionary->entry, idx = 0UL;
+  NSCParameterAssert((removeIdx < dictionary->capacity));
+  for(idx = 0UL; idx < dictionary->capacity; idx++) {
+    NSUInteger entryIdx = (removeIdx + idx + 1UL) % dictionary->capacity;
+    JKHashTableEntry *atEntry = &dictionary->entry[entryIdx];
+    if(atEntry->key == NULL) { break; }
+    NSUInteger keyHash = atEntry->keyHash;
+    id key = atEntry->key, object = atEntry->object;
+    NSCParameterAssert(object != NULL);
+    atEntry->keyHash = 0UL;
+    atEntry->key     = NULL;
+    atEntry->object  = NULL;
+    NSUInteger addKeyEntry = keyHash % dictionary->capacity, addIdx = 0UL;
+    for(addIdx = 0UL; addIdx < dictionary->capacity; addIdx++) {
+      JKHashTableEntry *atAddEntry = &dictionary->entry[((addKeyEntry + addIdx) % dictionary->capacity)];
+      if(JK_EXPECT_T(atAddEntry->key == NULL)) { NSCParameterAssert((atAddEntry->keyHash == 0UL) && (atAddEntry->object == NULL)); atAddEntry->key = key; atAddEntry->object = object; atAddEntry->keyHash = keyHash; break; }
+    }
+  }
 }
 
 static void _JKDictionaryAddObject(JKDictionary *dictionary, NSUInteger keyHash, id key, id object) {
@@ -951,7 +970,7 @@ static void _JKDictionaryAddObject(JKDictionary *dictionary, NSUInteger keyHash,
     NSUInteger entryIdx = (keyEntry + idx) % dictionary->capacity;
     JKHashTableEntry *atEntry = &dictionary->entry[entryIdx];
     if(JK_EXPECT_F(atEntry->keyHash == keyHash) && JK_EXPECT_T(atEntry->key != NULL) && (JK_EXPECT_F(key == atEntry->key) || JK_EXPECT_F(CFEqual(atEntry->key, key)))) { _JKDictionaryRemoveObjectWithEntry(dictionary, atEntry); }
-    if(JK_EXPECT_T(atEntry->key == NULL)) { atEntry->key = key; atEntry->object = object; atEntry->keyHash = keyHash; dictionary->count++; return; }
+    if(JK_EXPECT_T(atEntry->key == NULL)) { NSCParameterAssert((atEntry->keyHash == 0UL) && (atEntry->object == NULL)); atEntry->key = key; atEntry->object = object; atEntry->keyHash = keyHash; dictionary->count++; return; }
   }
 
   // We should never get here.  If we do, we -release the key / object because it's our responsibility.
