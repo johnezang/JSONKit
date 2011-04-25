@@ -2790,7 +2790,7 @@ rerunAfterClassFormatter:
   id returnObject = NULL;
 
   if(encodeState != NULL) { [self releaseState]; }
-  if((encodeState = (struct JKEncodeState *)calloc(1UL, sizeof(JKEncodeState))) == NULL) { [NSException exceptionWithName:NSMallocException reason:@"Unable to allocate state structure." userInfo:NULL]; return(NULL); }
+  if((encodeState = (struct JKEncodeState *)calloc(1UL, sizeof(JKEncodeState))) == NULL) { [NSException raise:NSMallocException format:@"Unable to allocate state structure."]; return(NULL); }
 
   if((error != NULL) && (*error != NULL)) { *error = NULL; }
 
