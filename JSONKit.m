@@ -623,6 +623,7 @@ static size_t _JKArrayInstanceSize = 0UL;
 
 + (void)load
 {
+  if (_JKArrayClass != NULL) return;
   NSAutoreleasePool *pool = [[NSAutoreleasePool alloc] init]; // Though technically not required, the run time environment at +load time may be less than ideal.
 
   _JKArrayClass        = objc_getClass("JKArray");
@@ -639,6 +640,7 @@ static size_t _JKArrayInstanceSize = 0UL;
 }
 
 static JKArray *_JKArrayCreate(id *objects, NSUInteger count, BOOL mutableCollection) {
+  if (_JKArrayClass == NULL) [JKArray load]; // Workaround for JSONKit used in a static library in the device runtime
   NSCParameterAssert((objects != NULL) && (_JKArrayClass != NULL) && (_JKArrayInstanceSize > 0UL));
   JKArray *array = NULL;
   if(JK_EXPECT_T((array = (JKArray *)calloc(1UL, _JKArrayInstanceSize)) != NULL)) { // Directly allocate the JKArray instance via calloc.
@@ -841,6 +843,7 @@ static size_t _JKDictionaryInstanceSize = 0UL;
 
 + (void)load
 {
+  if (_JKDictionaryClass != NULL) return;
   NSAutoreleasePool *pool = [[NSAutoreleasePool alloc] init]; // Though technically not required, the run time environment at +load time may be less than ideal.
 
   _JKDictionaryClass        = objc_getClass("JKDictionary");
@@ -893,6 +896,7 @@ static void _JKDictionaryResizeIfNeccessary(JKDictionary *dictionary) {
 }
 
 static JKDictionary *_JKDictionaryCreate(id *keys, NSUInteger *keyHashes, id *objects, NSUInteger count, BOOL mutableCollection) {
+  if (_JKDictionaryClass == NULL) [JKDictionary load]; // Workaround for JSONKit used in a static library in the device runtime
   NSCParameterAssert((keys != NULL) && (keyHashes != NULL) && (objects != NULL) && (_JKDictionaryClass != NULL) && (_JKDictionaryInstanceSize > 0UL));
   JKDictionary *dictionary = NULL;
   if(JK_EXPECT_T((dictionary = (JKDictionary *)calloc(1UL, _JKDictionaryInstanceSize)) != NULL)) { // Directly allocate the JKDictionary instance via calloc.
