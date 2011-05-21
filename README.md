@@ -21,6 +21,8 @@ JSONKit is licensed under the terms of the BSD License.  Copyright &copy; 2011, 
     * Parsing / deserializing will automagically decompress a buffer if it detects a `gzip` signature header.
     * You can compress / `gzip` the serialized JSON by passing `JKSerializeOptionCompress` to `-JSONDataWithOptions:error:`.
 
+[JSON versus PLIST, the Ultimate Showdown](http://www.cocoanetics.com/2011/03/json-versus-plist-the-ultimate-showdown/) benchmarks the common JSON libraries and compares them to Apples `.plist` format.
+
 ***
 
 JavaScript Object Notation, or [JSON][], is a lightweight, text-based, serialization format for structured data that is used by many web-based services and API's.  It is defined by [RFC 4627][].
