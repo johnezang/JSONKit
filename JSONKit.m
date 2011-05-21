@@ -614,21 +614,36 @@ JK_STATIC_INLINE JKHash calculateHash(JKHash currentHash, unsigned char c);
 // Basically, there seem to be a problem with using +load in static libraries on iOS.  However, __attribute__ ((constructor)) does work correctly.
 // Since we do not require anything "special" that +load provides, and we can accomplish the same thing using __attribute__ ((constructor)), the +load logic was moved here.
 
-static Class  _JKArrayClass             = NULL;
-static size_t _JKArrayInstanceSize      = 0UL;
-static Class  _JKDictionaryClass        = NULL;
-static size_t _JKDictionaryInstanceSize = 0UL;
+static Class                               _JKArrayClass                           = NULL;
+static size_t                              _JKArrayInstanceSize                    = 0UL;
+static Class                               _JKDictionaryClass                      = NULL;
+static size_t                              _JKDictionaryInstanceSize               = 0UL;
+
+// For JSONDecoder...
+static Class                               _jk_NSNumberClass                       = NULL;
+static NSNumberAllocImp                    _jk_NSNumberAllocImp                    = NULL;
+static NSNumberInitWithUnsignedLongLongImp _jk_NSNumberInitWithUnsignedLongLongImp = NULL;
 
 extern void jk_collectionClassLoadTimeInitialization(void) __attribute__ ((constructor));
 
 void jk_collectionClassLoadTimeInitialization(void) {
-  NSAutoreleasePool *pool = [[NSAutoreleasePool alloc] init]; // Though technically not required, the run time environment at +load time may be less than ideal.
+  NSAutoreleasePool *pool = [[NSAutoreleasePool alloc] init]; // Though technically not required, the run time environment at load time initialization may be less than ideal.
   
   _JKArrayClass             = objc_getClass("JKArray");
   _JKArrayInstanceSize      = jk_max(16UL, class_getInstanceSize(_JKArrayClass));
   
   _JKDictionaryClass        = objc_getClass("JKDictionary");
   _JKDictionaryInstanceSize = jk_max(16UL, class_getInstanceSize(_JKDictionaryClass));
+  
+  // For JSONDecoder...
+  _jk_NSNumberClass = [NSNumber class];
+  _jk_NSNumberAllocImp = (NSNumberAllocImp)[NSNumber methodForSelector:@selector(alloc)];
+  
+  // Hacktacular.  Need to do it this way due to the nature of class clusters.
+  id temp_NSNumber = [NSNumber alloc];
+  _jk_NSNumberInitWithUnsignedLongLongImp = (NSNumberInitWithUnsignedLongLongImp)[temp_NSNumber methodForSelector:@selector(initWithUnsignedLongLong:)];
+  [[temp_NSNumber init] release];
+  temp_NSNumber = NULL;
   
   [pool release]; pool = NULL;
 }
@@ -2051,26 +2066,6 @@ static void *jk_object_for_token(JKParseState *parseState) {
 
 #pragma mark -
 @implementation JSONDecoder
-
-static Class            _jk_NSNumberClass;
-static NSNumberAllocImp _jk_NSNumberAllocImp;
-static NSNumberInitWithUnsignedLongLongImp _jk_NSNumberInitWithUnsignedLongLongImp;
-
-+ (void)load
-{
-  NSAutoreleasePool *pool = [[NSAutoreleasePool alloc] init]; // Though technically not required, the run time environment at +load time may be less than ideal.
-  
-  _jk_NSNumberClass = [NSNumber class];
-  _jk_NSNumberAllocImp = (NSNumberAllocImp)[NSNumber methodForSelector:@selector(alloc)];
-  
-  // Hacktacular.  Need to do it this way due to the nature of class clusters.
-  id temp_NSNumber = [NSNumber alloc];
-  _jk_NSNumberInitWithUnsignedLongLongImp = (NSNumberInitWithUnsignedLongLongImp)[temp_NSNumber methodForSelector:@selector(initWithUnsignedLongLong:)];
-  [[temp_NSNumber init] release];
-  temp_NSNumber = NULL;
-  
-  [pool release]; pool = NULL;
-}
 
 + (id)decoder
 {
