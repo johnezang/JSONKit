@@ -4,12 +4,10 @@ JSONKit is dual licensed under either the terms of the BSD License, or alternati
 
 ### A Very High Performance Objective-C JSON Library
 
-<table>
-<tr><th>Parsing</th><th>Serializing</th></tr>
-<tr><td><img src="http://chart.googleapis.com/chart?chf=a,s,000000|b0,lg,0,6589C760,0,6589C7B4,1|bg,lg,90,EFEFEF,0,F8F8F8,1&chxl=0:|TouchJSON|XML+.plist|json-framework|YAJL-ObjC|gzip+JSONKit|Binary+.plist|JSONKit|2:|Time+to+Deserialize+in+%C2%B5sec&chxp=2,40&chxr=0,0,5|1,0,3250&chxs=0,676767,11.5,1,lt,676767&chxt=y,x,x&chbh=a,5,4&chs=350x185&cht=bhs&chco=6589C783&chds=0,3250&chd=t:410.517,510.262,539.614,1351.257,1683.346,1747.953,2955.881&chg=-1,0,1,3&chm=N+*s*+%C2%B5s,676767,0,0:5,10.5|N+*s*+%C2%B5s,3d3d3d,0,6,10.5,,r:-5:1&chem=y;s=text_outline;d=666,10.5,l,fff,_,Decompress+%2b+Parse+is+just;ds=0;dp=2;py=0;of=58,7|y;s=text_outline;d=666,10.5,l,fff,_,5.6%25+slower+than+Binary+.plist%21;ds=0;dp=2;py=0;of=53,-5" width="350" height="185" alt="Deserialize from JSON" /></td>
-<td><img src="http://chart.googleapis.com/chart?chf=a,s,000000|b0,lg,0,699E7260,0,699E72B4,1|bg,lg,90,EFEFEF,0,F8F8F8,1&chxl=0:|TouchJSON|YAJL-ObjC|XML+.plist|json-framework|Binary+.plist|gzip+JSONKit|JSONKit|2:|Time+to+Serialize+in+%C2%B5sec&chxp=2,40&chxr=0,0,5|1,0,3250&chxs=0,676767,11.5,1,lt,676767&chxt=y,x,x&chbh=a,5,4&chs=350x175&cht=bhs&chco=699E7284&chds=0,3250&chd=t:96.387,466.947,626.153,1028.432,1945.511,2156.978,3051.976&chg=-1,0,1,3&chm=N+*s*+%C2%B5s,676767,0,0:5,10.5|N+*s*+%C2%B5s,4d4d4d,0,6,10.5,,r:-5:1&chem=y;s=text_outline;d=666,10.5,l,fff,_,Serialize+%2b+Compress+is+34%25;ds=0;dp=1;py=0;of=51,7|y;s=text_outline;d=666,10.5,l,fff,_,faster+than+Binary+.plist%21;ds=0;dp=1;py=0;of=62,-5" width="350" height="185" alt="Serialize to JSON" /></td></tr>
-<tr><td align=center><em>23% Faster than Binary</em> <code><em>.plist</em></code><em>&thinsp;!</em></td><td align=center><em>549% Faster than Binary</em> <code><em>.plist</em></code><em>&thinsp;!</em></td></tr>
-</table>
+  Parsing  |  Serializing
+:---------:|:-------------:
+<img src="http://chart.googleapis.com/chart?chf=a,s,000000%7Cb0,lg,0,6589C760,0,6589C7B4,1%7Cbg,lg,90,EFEFEF,0,F8F8F8,1&chxl=0:%7CTouchJSON%7CXML+.plist%7Cjson-framework%7CYAJL-ObjC%7Cgzip+JSONKit%7CBinary+.plist%7CJSONKit%7C2:%7CTime+to+Deserialize+in+%C2%B5sec&chxp=2,40&chxr=0,0,5%7C1,0,3250&chxs=0,676767,11.5,1,lt,676767&chxt=y,x,x&chbh=a,5,4&chs=350x185&cht=bhs&chco=6589C783&chds=0,3250&chd=t:410.517,510.262,539.614,1351.257,1683.346,1747.953,2955.881&chg=-1,0,1,3&chm=N+*s*+%C2%B5s,676767,0,0:5,10.5%7CN+*s*+%C2%B5s,3d3d3d,0,6,10.5,,r:-5:1&chem=y;s=text_outline;d=666,10.5,l,fff,_,Decompress+%2b+Parse+is+just;ds=0;dp=2;py=0;of=58,7%7Cy;s=text_outline;d=666,10.5,l,fff,_,5.6%25+slower+than+Binary+.plist%21;ds=0;dp=2;py=0;of=53,-5" width="350" height="185" alt="Deserialize from JSON" /> | <img src="http://chart.googleapis.com/chart?chf=a,s,000000%7Cb0,lg,0,699E7260,0,699E72B4,1%7Cbg,lg,90,EFEFEF,0,F8F8F8,1&chxl=0:%7CTouchJSON%7CYAJL-ObjC%7CXML+.plist%7Cjson-framework%7CBinary+.plist%7Cgzip+JSONKit%7CJSONKit%7C2:%7CTime+to+Serialize+in+%C2%B5sec&chxp=2,40&chxr=0,0,5%7C1,0,3250&chxs=0,676767,11.5,1,lt,676767&chxt=y,x,x&chbh=a,5,4&chs=350x175&cht=bhs&chco=699E7284&chds=0,3250&chd=t:96.387,466.947,626.153,1028.432,1945.511,2156.978,3051.976&chg=-1,0,1,3&chm=N+*s*+%C2%B5s,676767,0,0:5,10.5%7CN+*s*+%C2%B5s,4d4d4d,0,6,10.5,,r:-5:1&chem=y;s=text_outline;d=666,10.5,l,fff,_,Serialize+%2b+Compress+is+34%25;ds=0;dp=1;py=0;of=51,7%7Cy;s=text_outline;d=666,10.5,l,fff,_,faster+than+Binary+.plist%21;ds=0;dp=1;py=0;of=62,-5" width="350" height="185" alt="Serialize to JSON" />
+*23% Faster than Binary* <code><em>.plist</em></code>*&thinsp;!* | *549% Faster than Binary* <code><em>.plist</em></code>*&thinsp;!*
 
 * Benchmarking was performed on a MacBook Pro with a 2.66GHz Core 2.
 * All JSON libraries were compiled with `gcc-4.2 -DNS_BLOCK_ASSERTIONS -O3 -arch x86_64`.
@@ -38,15 +36,14 @@ JSON provides the following primitive types:
 
 These primitive types are mapped to the following Objective-C Foundation classes:
 
-<table>
-<tr><th>JSON</th><th>Objective-C</th></tr>
-<tr><td><code>null</code></td><td><a href="http://developer.apple.com/mac/library/documentation/Cocoa/Reference/Foundation/Classes/NSNull_Class/index.html"><code>NSNull</code></a></td></tr>
-<tr><td><code>true</code> and <code>false</code></td><td><a href="http://developer.apple.com/mac/library/documentation/Cocoa/Reference/Foundation/Classes/NSNumber_Class/index.html"><code>NSNumber</code></a></td></tr>
-<tr><td>Number</td><td><a href="http://developer.apple.com/mac/library/documentation/Cocoa/Reference/Foundation/Classes/NSNumber_Class/index.html"><code>NSNumber</code></a></td></tr>
-<tr><td>String</td><td><a href="http://developer.apple.com/mac/library/documentation/Cocoa/Reference/Foundation/Classes/NSString_Class/index.html"><code>NSString</code></a></td></tr>
-<tr><td>Array</td><td><a href="http://developer.apple.com/mac/library/documentation/Cocoa/Reference/Foundation/Classes/NSArray_Class/index.html"><code>NSArray</code></a></td></tr>
-<tr><td>Object</td><td><a href="http://developer.apple.com/mac/library/documentation/Cocoa/Reference/Foundation/Classes/NSDictionary_Class/index.html"><code>NSDictionary</code></a></td></tr>
-</table>
+JSON               | Objective-C
+-------------------|-------------
+`null`             | [`NSNull`][NSNull]
+`true` and `false` | [`NSNumber`][NSNumber]
+Number             | [`NSNumber`][NSNumber]
+String             | [`NSString`][NSString]
+Array              | [`NSArray`][NSArray]
+Object             | [`NSDictionary`][NSDictionary]
 
 JSONKit uses Core Foundation internally, and it is assumed that Core Foundation &equiv; Foundation for every equivalent base type, i.e. [`CFString`][CFString] &equiv; [`NSString`][NSString].
 
@@ -90,6 +87,9 @@ The key words "MUST", "MUST NOT", "REQUIRED", "SHALL", "SHALL NOT", "SHOULD", "S
 *   For JSON Objects (or [`NSDictionary`][NSDictionary] in JSONKit nomenclature), [RFC 4627][] says `The names within an object SHOULD be unique` (note: `name` is a `key` in JSONKit nomenclature). At this time the JSONKit behavior is `undefined` for JSON that contains names within an object that are not unique.  However, JSONKit currently tries to follow a "the last key / value pair parsed is the one chosen" policy. This behavior is not finalized and should not be depended on.
     
     The previously covered limitations regarding JSON Strings have important consequences for JSON Objects since JSON Strings are used as the `key`.  The [JSON specification][RFC 4627] does not specify the details or requirements for JSON Strings used as `keys` in JSON Objects, specifically what it means for two `keys` to compare equal.  Unfortunately, because [RFC 4627][] states `JSON text SHALL be encoded in Unicode.`, this means that one must use the [Unicode Standard][] to interpret the JSON, and the [Unicode Standard][] allows for strings that are encoded with different Unicode Code Points to "compare equal".  JSONKit uses [`NSString`][NSString] exclusively to manage the parsed JSON Strings.  Because [`NSString`][NSString] uses [Unicode][Unicode Standard] as its basis, there exists the possibility that [`NSString`][NSString] may subtly and silently convert the Unicode Code Points contained in the original JSON String in to a [Unicode equivalent][Unicode_equivalence] string.  Due to this, the JSONKit behavior for JSON Strings used as `keys` in JSON Objects that may be [Unicode equivalent][Unicode_equivalence] but not binary equivalent is `undefined`.
+    
+    **See also:**<br /> 
+    &nbsp;&nbsp;&nbsp;&nbsp;[W3C - Requirements for String Identity Matching and String Indexing](http://www.w3.org/TR/charreq/#sec2)
 
 ### Objective-C To JSON Primitive Mapping Details
 
@@ -97,9 +97,11 @@ The key words "MUST", "MUST NOT", "REQUIRED", "SHALL", "SHALL NOT", "SHOULD", "S
 
 *   The objects to be serialized MUST be acyclic.  If the objects to be serialized contain circular references the behavior is `undefined`.  For example,
 
-    <pre>[arrayOne addObject:arrayTwo];
+    ```objective-c
+    [arrayOne addObject:arrayTwo];
     [arrayTwo addObject:arrayOne];
-    id json = [arrayOne JSONString];</pre>
+    id json = [arrayOne JSONString];
+    ```
     
     &hellip; will result in `undefined` behavior.
 
@@ -150,6 +152,8 @@ The author requests that you do not file a bug report with JSONKit regarding pro
 
 *   On average, the <code>JSONData&hellip;</code> methods are nearly four times faster than the <code>JSONString&hellip;</code> methods when serializing a [`NSDictionary`][NSDictionary] or [`NSArray`][NSArray] to JSON.  The difference in speed is due entirely to the instantiation overhead of [`NSString`][NSString].
 
+*   If at all possible, use [`NSData`][NSData] instead of [`NSString`][NSString] methods when processing JSON.  This avoids the sometimes significant conversion overhead that [`NSString`][NSString] performs in order to provide an object oriented interface for its contents.   For many uses, using [`NSString`][NSString] is not needed and results in wasted effort&ndash;  for example, using JSONKit to serialize a [`NSDictionary`][NSDictionary] or [`NSArray`][NSArray] to a [`NSString`][NSString].  This [`NSString`][NSString] is then passed to a method that sends the JSON to a web server, and this invariably requires converting the [`NSString`][NSString] to [`NSData`][NSData] before it can be sent.  In this case, serializing the collection object directly to [`NSData`][NSData] would avoid the unnecessary conversions to and from a [`NSString`][NSString] object.
+
 ### Parsing Interface
 
 #### JSONDecoder Interface
@@ -162,7 +166,8 @@ The <code>objectWith&hellip;</code> methods return immutable collection objects 
 **Important:** `objectWithUTF8String:` and `mutableObjectWithUTF8String:` will raise [`NSInvalidArgumentException`][NSInvalidArgumentException] if `string` is `NULL`.  
 **Important:** `objectWithData:` and `mutableObjectWithData:` will raise [`NSInvalidArgumentException`][NSInvalidArgumentException] if `jsonData` is `NULL`.
 
-<pre>+ (id)decoder;
+```objective-c
++ (id)decoder;
 + (id)decoderWithParseOptions:(JKParseOptionFlags)parseOptionFlags;
 - (id)initWithParseOptions:(JKParseOptionFlags)parseOptionFlags;
 
@@ -176,72 +181,82 @@ The <code>objectWith&hellip;</code> methods return immutable collection objects 
 - (id)objectWithData:(NSData *)jsonData;
 - (id)objectWithData:(NSData *)jsonData error:(NSError **)error;
 - (id)mutableObjectWithData:(NSData *)jsonData;
-- (id)mutableObjectWithData:(NSData *)jsonData error:(NSError **)error;</pre>
+- (id)mutableObjectWithData:(NSData *)jsonData error:(NSError **)error;
+```
 
 #### NSString Interface
 
-<pre>- (id)objectFromJSONString;
+```objective-c
+- (id)objectFromJSONString;
 - (id)objectFromJSONStringWithParseOptions:(JKParseOptionFlags)parseOptionFlags;
 - (id)objectFromJSONStringWithParseOptions:(JKParseOptionFlags)parseOptionFlags error:(NSError **)error;
 - (id)mutableObjectFromJSONString;
 - (id)mutableObjectFromJSONStringWithParseOptions:(JKParseOptionFlags)parseOptionFlags;
-- (id)mutableObjectFromJSONStringWithParseOptions:(JKParseOptionFlags)parseOptionFlags error:(NSError **)error;</pre>
+- (id)mutableObjectFromJSONStringWithParseOptions:(JKParseOptionFlags)parseOptionFlags error:(NSError **)error;
+```
 
 #### NSData Interface
 
-<pre>- (id)objectFromJSONData;
+```objective-c
+- (id)objectFromJSONData;
 - (id)objectFromJSONDataWithParseOptions:(JKParseOptionFlags)parseOptionFlags;
 - (id)objectFromJSONDataWithParseOptions:(JKParseOptionFlags)parseOptionFlags error:(NSError **)error;
 - (id)mutableObjectFromJSONData;
 - (id)mutableObjectFromJSONDataWithParseOptions:(JKParseOptionFlags)parseOptionFlags;
-- (id)mutableObjectFromJSONDataWithParseOptions:(JKParseOptionFlags)parseOptionFlags error:(NSError **)error;</pre>
+- (id)mutableObjectFromJSONDataWithParseOptions:(JKParseOptionFlags)parseOptionFlags error:(NSError **)error;
+```
 
 #### JKParseOptionFlags
 
 <table>
   <tr><th>Parsing Option</th><th>Description</th></tr>
-  <tr><td><code>JKParseOptionNone</code></td><td>This is the default if no other other parse option flags are specified, and the option used when a convenience method does not provide an argument for explicitly specifying the parse options to use.  Synonymous with <code>JKParseOptionStrict</code>.</td></tr>
-  <tr><td><code>JKParseOptionStrict</code></td><td>The JSON will be parsed in strict accordance with the <a href="http://tools.ietf.org/html/rfc4627">RFC 4627</a> specification.</td></tr>
-  <tr><td><code>JKParseOptionComments</code></td><td>Allow C style <code>//</code> and <code>/* &hellip; */</code> comments in JSON.  This is a fairly common extension to JSON, but JSON that contains C style comments is not strictly conforming JSON.</td></tr>
-  <tr><td><code>JKParseOptionUnicodeNewlines</code></td><td>Allow Unicode recommended <code>(?:\r\n|[\n\v\f\r\x85\p{Zl}\p{Zp}])</code> newlines in JSON.  The <a href="http://tools.ietf.org/html/rfc4627">JSON specification</a> only allows the newline characters <code>\r</code> and <code>\n</code>, but this option allows JSON that contains the <a href="http://en.wikipedia.org/wiki/Newline#Unicode">Unicode recommended newline characters</a> to be parsed.  JSON that contains these additional newline characters is not strictly conforming JSON.</td></tr>
-  <tr><td><code>JKParseOptionLooseUnicode</code></td><td>Normally the decoder will stop with an error at any malformed Unicode. This option allows JSON with malformed Unicode to be parsed without reporting an error. Any malformed Unicode is replaced with <code>\uFFFD</code>, or <code>REPLACEMENT CHARACTER</code>, as specified in <a href="http://www.unicode.org/versions/Unicode6.0.0/ch03.pdf">The Unicode 6.0 standard, Chapter 3</a>, section 3.9 <em>Unicode Encoding Forms</em>.</td></tr>
-  <tr><td><code>JKParseOptionPermitTextAfterValidJSON</code></td><td>Normally, <code>non-white-space</code> that follows the JSON is interpreted as a parsing failure. This option allows for any trailing <code>non-white-space</code> to be ignored and not cause a parsing error.</td></tr>
+  <tr><td valign="top"><code>JKParseOptionNone</code></td><td>This is the default if no other other parse option flags are specified, and the option used when a convenience method does not provide an argument for explicitly specifying the parse options to use.  Synonymous with <code>JKParseOptionStrict</code>.</td></tr>
+  <tr><td valign="top"><code>JKParseOptionStrict</code></td><td>The JSON will be parsed in strict accordance with the <a href="http://tools.ietf.org/html/rfc4627">RFC 4627</a> specification.</td></tr>
+  <tr><td valign="top"><code>JKParseOptionComments</code></td><td>Allow C style <code>//</code> and <code>/* &hellip; */</code> comments in JSON.  This is a fairly common extension to JSON, but JSON that contains C style comments is not strictly conforming JSON.</td></tr>
+  <tr><td valign="top"><code>JKParseOptionUnicodeNewlines</code></td><td>Allow Unicode recommended <code>(?:\r\n|[\n\v\f\r\x85\p{Zl}\p{Zp}])</code> newlines in JSON.  The <a href="http://tools.ietf.org/html/rfc4627">JSON specification</a> only allows the newline characters <code>\r</code> and <code>\n</code>, but this option allows JSON that contains the <a href="http://en.wikipedia.org/wiki/Newline#Unicode">Unicode recommended newline characters</a> to be parsed.  JSON that contains these additional newline characters is not strictly conforming JSON.</td></tr>
+  <tr><td valign="top"><code>JKParseOptionLooseUnicode</code></td><td>Normally the decoder will stop with an error at any malformed Unicode. This option allows JSON with malformed Unicode to be parsed without reporting an error. Any malformed Unicode is replaced with <code>\uFFFD</code>, or <code>REPLACEMENT CHARACTER</code>, as specified in <a href="http://www.unicode.org/versions/Unicode6.0.0/ch03.pdf">The Unicode 6.0 standard, Chapter 3</a>, section 3.9 <em>Unicode Encoding Forms</em>.</td></tr>
+  <tr><td valign="top"><code>JKParseOptionPermitTextAfterValidJSON</code></td><td>Normally, <code>non-white-space</code> that follows the JSON is interpreted as a parsing failure. This option allows for any trailing <code>non-white-space</code> to be ignored and not cause a parsing error.</td></tr>
 </table>
 
 ### Serializing Interface
 
 The serializing interface includes [`NSString`][NSString] convenience methods for those that need to serialize a single [`NSString`][NSString].  For those that need this functionality, the [`NSString`][NSString] additions are much more convenient than having to wrap a single [`NSString`][NSString] in a [`NSArray`][NSArray], which then requires stripping the unneeded `[`&hellip;`]` characters from the serialized JSON result.  When serializing a single [`NSString`][NSString], you can control whether or not the serialized JSON result is surrounded by quotation marks using the `includeQuotes:` argument:
 
-<table>
-<tr><th>Example</th><th>Result</th><th>Argument</th></tr>
-<tr><td><code>a "test"...</code></td><td><code>"a \"test\"..."</code></td><td><code>includeQuotes:YES</code></td></tr>
-<tr><td><code>a "test"...</code></td><td><code>a \"test\"...</code></td><td><code>includeQuotes:NO</code></td></tr>
-</table>
+Example       | Result            | Argument
+--------------|-------------------|--------------------
+`a "test"...` | `"a \"test\"..."` | `includeQuotes:YES`
+`a "test"...` | `a \"test\"...`   | `includeQuotes:NO`
 
 **Note:** The [`NSString`][NSString] methods that do not include a `includeQuotes:` argument behave as if invoked with `includeQuotes:YES`.  
 **Note:** The bytes contained in the returned [`NSData`][NSData] object are `UTF8` encoded.
 
 #### NSArray and NSDictionary Interface
 
-<pre>- (NSData *)JSONData;
+```objective-c
+- (NSData *)JSONData;
 - (NSData *)JSONDataWithOptions:(JKSerializeOptionFlags)serializeOptions error:(NSError **)error;
 - (NSString *)JSONString;
-- (NSString *)JSONStringWithOptions:(JKSerializeOptionFlags)serializeOptions error:(NSError **)error;</pre>
+- (NSString *)JSONStringWithOptions:(JKSerializeOptionFlags)serializeOptions error:(NSError **)error;
+```
+
 
 #### NSString Interface
 
-<pre>- (NSData *)JSONData;
+```objective-c
+- (NSData *)JSONData;
 - (NSData *)JSONDataWithOptions:(JKSerializeOptionFlags)serializeOptions includeQuotes:(BOOL)includeQuotes error:(NSError **)error;
 - (NSString *)JSONString;
-- (NSString *)JSONStringWithOptions:(JKSerializeOptionFlags)serializeOptions includeQuotes:(BOOL)includeQuotes error:(NSError **)error;</pre>
+- (NSString *)JSONStringWithOptions:(JKSerializeOptionFlags)serializeOptions includeQuotes:(BOOL)includeQuotes error:(NSError **)error;
+```
 
 #### JKSerializeOptionFlags
 
 <table>
   <tr><th>Serializing Option</th><th>Description</th></tr>
-  <tr><td><code>JKSerializeOptionNone</code></td><td>This is the default if no other other serialize option flags are specified, and the option used when a convenience method does not provide an argument for explicitly specifying the serialize options to use.</td></tr>
-  <tr><td><code>JKSerializeOptionPretty</code></td><td>Normally the serialized JSON does not include any unnecessary <code>white-space</code>.  While this form is the most compact, the lack of any <code>white-space</code> means that it's something only another JSON parser could love.  Enabling this option causes JSONKit to add additional <code>white-space</code> that makes it easier for people to read.  Other than the extra <code>white-space</code>, the serialized JSON is identical to the JSON that would have been produced had this option not been enabled.</td></tr>
-  <tr><td><code>JKSerializeOptionEscapeUnicode</code></td><td>When JSONKit encounters Unicode characters in <a href="http://developer.apple.com/mac/library/documentation/Cocoa/Reference/Foundation/Classes/NSString_Class/index.html"><code>NSString</code></a> objects, the default behavior is to encode those Unicode characters as <code>UTF8</code>.  This option causes JSONKit to encode those characters as <code>\u<i>XXXX</i></code>.  For example,<br/><code>["w&isin;L&#10234;y(&#8739;y&#8739;&le;&#8739;w&#8739;)"]</code><br/>becomes:<br/><code>["w\u2208L\u27fa\u2203y(\u2223y\u2223\u2264\u2223w\u2223)"]</code></td></tr>
+  <tr><td valign="top"><code>JKSerializeOptionNone</code></td><td>This is the default if no other other serialize option flags are specified, and the option used when a convenience method does not provide an argument for explicitly specifying the serialize options to use.</td></tr>
+  <tr><td valign="top"><code>JKSerializeOptionPretty</code></td><td>Normally the serialized JSON does not include any unnecessary <code>white-space</code>.  While this form is the most compact, the lack of any <code>white-space</code> means that it's something only another JSON parser could love.  Enabling this option causes JSONKit to add additional <code>white-space</code> that makes it easier for people to read.  Other than the extra <code>white-space</code>, the serialized JSON is identical to the JSON that would have been produced had this option not been enabled.</td></tr>
+  <tr><td valign="top"><code>JKSerializeOptionEscapeUnicode</code></td><td>When JSONKit encounters Unicode characters in <a href="http://developer.apple.com/mac/library/documentation/Cocoa/Reference/Foundation/Classes/NSString_Class/index.html"><code>NSString</code></a> objects, the default behavior is to encode those Unicode characters as <code>UTF8</code>.  This option causes JSONKit to encode those characters as <code>\u<i>XXXX</i></code>.  For example,<br/><code>["w&isin;L&#10234;y(&#8739;y&#8739;&le;&#8739;w&#8739;)"]</code><br/>becomes:<br/><code>["w\u2208L\u27fa\u2203y(\u2223y\u2223\u2264\u2223w\u2223)"]</code></td></tr>
+  <tr><td valign="top"><code>JKSerializeOptionEscapeForwardSlashes</code></td><td>According to the <a href="http://tools.ietf.org/html/rfc4627">JSON specification</a>, the <code>/</code> (<code>U+002F</code>) character may be backslash escaped (i.e., <code>\/</code>), but it is not required.  The default behavior of JSONKit is to <b><i>not</i></b> backslash escape the <code>/</code> character.  Unfortunately, it was found some real world implementations of the <a href="http://weblogs.asp.net/bleroy/archive/2008/01/18/dates-and-json.aspx">ASP.NET Date Format</a> require the date to be <i>strictly</i> encoded as <code>\/Date(...)\/</code>, and the only way to achieve this is through the use of <code>JKSerializeOptionEscapeForwardSlashes</code>.  See <a href="https://github.com/johnezang/JSONKit/issues/21">github issue #21</a> for more information.</td></tr>
 </table>
 
 [JSON]: http://www.json.org/
