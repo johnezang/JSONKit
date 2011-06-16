@@ -2220,7 +2220,7 @@ static id _JKParseUTF8String(JKParseState *parseState, BOOL mutableCollections, 
   return([self objectWithData:jsonData error:error]);
 }
 
-#pragma clang pop
+#pragma clang diagnostic pop
 
 ////////////
 #pragma mark Methods that return immutable collection objects
