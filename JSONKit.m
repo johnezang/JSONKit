@@ -124,12 +124,20 @@
 #import <Foundation/NSNull.h>
 #import <Foundation/NSObjCRuntime.h>
 
+#ifndef __has_feature
+#define __has_feature(x) 0
+#endif
+
 #ifdef JK_ENABLE_CF_TRANSFER_OWNERSHIP_CALLBACKS
 #warning As of JSONKit v1.4, JK_ENABLE_CF_TRANSFER_OWNERSHIP_CALLBACKS is no longer required.  It is no longer a valid option.
 #endif
 
 #ifdef __OBJC_GC__
 #error JSONKit does not support Objective-C Garbage Collection
+#endif
+
+#if __has_feature(objc_arc)
+#error JSONKit does not support Objective-C Automatic Reference Counting (ARC)
 #endif
 
 // The following checks are really nothing more than sanity checks.

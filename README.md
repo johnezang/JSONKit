@@ -131,7 +131,9 @@ The author requests that you do not file a bug report with JSONKit regarding pro
 
 ### Important Details
 
-*   JSONKit is not designed to be used with the Mac OS X Garbage Collection.  The behavior of JSONKit when compiled with `-fobj-gc` is `undefined`.  It is extremely unlikely that Mac OS X Garbage Collection will ever be supported.
+*   JSONKit is not designed to be used with the Mac OS X Garbage Collection.  The behavior of JSONKit when compiled with `-fobjc-gc` is `undefined`.  It is extremely unlikely that Mac OS X Garbage Collection will ever be supported.
+
+*   JSONKit is not designed to be used with [Objective-C Automatic Reference Counting (ARC)][ARC].  The behavior of JSONKit when compiled with `-fobjc-arc` is `undefined`.  The behavior of JSONKit compiled without [ARC][] mixed with code that has been compiled with [ARC][] is normatively `undefined` since at this time no analysis has been done to understand if this configuration is safe to use.  At this time, there are no plans to support [ARC][] in JSONKit.  Although tenative, it is extremely unlikely that [ARC][] will ever be supported, for many of the same reasons that Mac OS X Garbage Collection is not supported.
 
 *   The JSON to be parsed by JSONKit MUST be encoded as Unicode.  In the unlikely event you end up with JSON that is not encoded as Unicode, you must first convert the JSON to Unicode, preferably as `UTF8`.  One way to accomplish this is with the [`NSString`][NSString] methods [`-initWithBytes:length:encoding:`][NSString_initWithBytes] and [`-initWithData:encoding:`][NSString_initWithData].
 
@@ -266,6 +268,7 @@ Example       | Result            | Argument
 [Single Precision]: http://en.wikipedia.org/wiki/Single_precision_floating-point_format
 [Double Precision]: http://en.wikipedia.org/wiki/Double_precision_floating-point_format
 [wiki_invariant]: http://en.wikipedia.org/wiki/Invariant_(computer_science)
+[ARC]: http://clang.llvm.org/docs/AutomaticReferenceCounting.html
 [CFBoolean]: http://developer.apple.com/mac/library/documentation/CoreFoundation/Reference/CFBooleanRef/index.html
 [kCFBooleanTrue]: http://developer.apple.com/mac/library/documentation/CoreFoundation/Reference/CFBooleanRef/Reference/reference.html#//apple_ref/doc/c_ref/kCFBooleanTrue
 [kCFBooleanFalse]: http://developer.apple.com/mac/library/documentation/CoreFoundation/Reference/CFBooleanRef/Reference/reference.html#//apple_ref/doc/c_ref/kCFBooleanFalse
