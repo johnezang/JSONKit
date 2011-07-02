@@ -651,9 +651,8 @@ void jk_collectionClassLoadTimeInitialization(void) {
   id temp_NSNumber = [NSNumber alloc];
   _jk_NSNumberInitWithUnsignedLongLongImp = (NSNumberInitWithUnsignedLongLongImp)[temp_NSNumber methodForSelector:@selector(initWithUnsignedLongLong:)];
   [[temp_NSNumber init] release];
-  temp_NSNumber = NULL;
   
-  [pool release]; pool = NULL;
+  [pool release];
 }
 
 
@@ -718,8 +717,7 @@ static void _JKArrayRemoveObjectAtIndex(JKArray *array, NSUInteger objectIndex) 
   if(!((array != NULL) && (array->objects != NULL) && (objectIndex < array->count) && (array->objects[objectIndex] != NULL))) { return; }
   CFRelease(array->objects[objectIndex]);
   array->objects[objectIndex] = NULL;
-  if((objectIndex + 1UL) < array->count) { memmove(&array->objects[objectIndex], &array->objects[objectIndex + 1UL], sizeof(id) * ((array->count - 1UL) - objectIndex)); array->objects[array->count] = NULL; }
-  array->count--;
+  if((objectIndex + 1UL) < array->count) { memmove(&array->objects[objectIndex], &array->objects[objectIndex + 1UL], sizeof(id) * ((array->count - 1UL) - objectIndex)); array->objects[--(array->count)] = NULL; }
 }
 
 - (void)dealloc
