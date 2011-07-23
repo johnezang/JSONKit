@@ -126,10 +126,11 @@ enum {
 typedef JKFlags JKParseOptionFlags;
 
 enum {
-  JKSerializeOptionNone           = 0,
-  JKSerializeOptionPretty         = (1 << 0),
-  JKSerializeOptionEscapeUnicode  = (1 << 1),
-  JKSerializeOptionValidFlags     = (JKSerializeOptionPretty | JKSerializeOptionEscapeUnicode),
+  JKSerializeOptionNone                 = 0,
+  JKSerializeOptionPretty               = (1 << 0),
+  JKSerializeOptionEscapeUnicode        = (1 << 1),
+  JKSerializeOptionEscapeForwardSlashes = (1 << 4),
+  JKSerializeOptionValidFlags           = (JKSerializeOptionPretty | JKSerializeOptionEscapeUnicode | JKSerializeOptionEscapeForwardSlashes),
 };
 typedef JKFlags JKSerializeOptionFlags;
 
