@@ -805,13 +805,13 @@ static void _JKArrayRemoveObjectAtIndex(JKArray *array, NSUInteger objectIndex) 
 - (id)copyWithZone:(NSZone *)zone
 {
   NSParameterAssert((objects != NULL) && (count <= capacity));
-  return((mutations == 0UL) ? [self retain] : [[NSArray allocWithZone:zone] initWithObjects:objects count:count]);
+  return((mutations == 0UL) ? [self retain] : [(NSArray *)[NSArray allocWithZone:zone] initWithObjects:objects count:count]);
 }
 
 - (id)mutableCopyWithZone:(NSZone *)zone
 {
   NSParameterAssert((objects != NULL) && (count <= capacity));
-  return([[NSMutableArray allocWithZone:zone] initWithObjects:objects count:count]);
+  return([(NSMutableArray *)[NSMutableArray allocWithZone:zone] initWithObjects:objects count:count]);
 }
 
 @end
