@@ -790,6 +790,10 @@ static void _JKArrayRemoveObjectAtIndex(JKArray *array, NSUInteger objectIndex) 
   mutations = (mutations == NSUIntegerMax) ? 1UL : mutations + 1UL;
 }
 
+- (void)addObject:(id)anObject {
+  [self insertObject: anObject atIndex: count];
+}
+
 - (void)replaceObjectAtIndex:(NSUInteger)objectIndex withObject:(id)anObject
 {
   if(mutations   == 0UL)   { [NSException raise:NSInternalInconsistencyException format:@"*** -[%@ %@]: mutating method sent to immutable object", NSStringFromClass([self class]), NSStringFromSelector(_cmd)]; }
