@@ -897,7 +897,7 @@ static const NSUInteger jk_dictionaryCapacities[] = {
 };
 
 static NSUInteger _JKDictionaryCapacityForCount(NSUInteger count) {
-  NSUInteger bottom = 0UL, top = sizeof(jk_dictionaryCapacities) / sizeof(NSUInteger), mid = 0UL, tableSize = lround(floor((count) * 1.33));
+  NSUInteger bottom = 0UL, top = sizeof(jk_dictionaryCapacities) / sizeof(NSUInteger), mid = 0UL, tableSize = (NSUInteger)lround(floor((count) * 1.33));
   while(top > bottom) { mid = (top + bottom) / 2UL; if(jk_dictionaryCapacities[mid] < tableSize) { bottom = mid + 1UL; } else { top = mid; } }
   return(jk_dictionaryCapacities[bottom]);
 }
@@ -974,7 +974,7 @@ static void _JKDictionaryRemoveObjectWithEntry(JKDictionary *dictionary, JKHashT
   entry->keyHash = 0UL;
   dictionary->count--;
   // In order for certain invariants that are used to speed up the search for a particular key, we need to "re-add" all the entries in the hash table following this entry until we hit a NULL entry.
-  NSUInteger removeIdx = entry - dictionary->entry, idx = 0UL;
+  NSUInteger removeIdx = (NSUInteger)(entry - dictionary->entry), idx = 0UL;
   NSCParameterAssert((removeIdx < dictionary->capacity));
   for(idx = 0UL; idx < dictionary->capacity; idx++) {
     NSUInteger entryIdx = (removeIdx + idx + 1UL) % dictionary->capacity;
@@ -1337,7 +1337,7 @@ static ConversionResult ConvertSingleCodePointInUTF8(const UTF8 *sourceStart, co
 #if !defined(JK_FAST_TRAILING_BYTES)
   unsigned short extraBytesToRead = trailingBytesForUTF8[*source];
 #else
-  unsigned short extraBytesToRead = __builtin_clz(((*source)^0xff) << 25);
+  unsigned short extraBytesToRead = (unsigned short)__builtin_clz((unsigned int)((*source)^0xff) << 25);
 #endif
 
   if(JK_EXPECT_F((source + extraBytesToRead + 1) > sourceEnd) || JK_EXPECT_F(!isLegalUTF8(source, extraBytesToRead + 1))) {
@@ -1407,7 +1407,7 @@ JK_STATIC_INLINE int jk_string_add_unicodeCodePoint(JKParseState *parseState, ui
   ConversionResult  result;
 
   if((result = ConvertUTF32toUTF8(unicodeCodePoint, &u8s, (parseState->token.tokenBuffer.bytes.ptr + parseState->token.tokenBuffer.bytes.length))) != conversionOK) { if(result == targetExhausted) { return(1); } }
-  size_t utf8len = u8s - &parseState->token.tokenBuffer.bytes.ptr[*tokenBufferIdx], nextIdx = (*tokenBufferIdx) + utf8len;
+  size_t utf8len = (size_t)(u8s - &parseState->token.tokenBuffer.bytes.ptr[*tokenBufferIdx]), nextIdx = (*tokenBufferIdx) + utf8len;
   
   while(*tokenBufferIdx < nextIdx) { *stringHash = calculateHash(*stringHash, parseState->token.tokenBuffer.bytes.ptr[(*tokenBufferIdx)++]); }
 
@@ -1443,7 +1443,7 @@ static int jk_parse_string(JKParseState *parseState) {
       ConversionResult     result;
 
       if(JK_EXPECT_F((result = ConvertSingleCodePointInUTF8(atStringCharacter - 1, endOfBuffer, (UTF8 const **)&nextValidCharacter, &u32ch)) != conversionOK)) { goto switchToSlowPath; }
-      stringHash = calculateHash(stringHash, currentChar);
+      stringHash = calculateHash(stringHash, (unsigned char)currentChar);
       while(atStringCharacter < nextValidCharacter) { NSCParameterAssert(JK_AT_STRING_PTR(parseState) <= JK_END_STRING_PTR(parseState)); stringHash = calculateHash(stringHash, *atStringCharacter++); }
       continue;
     } else {
@@ -1453,7 +1453,7 @@ static int jk_parse_string(JKParseState *parseState) {
       switchToSlowPath:
         onlySimpleString = 0;
         stringState      = JSONStringStateParsing;
-        tokenBufferIdx   = (atStringCharacter - stringStart) - 1L;
+        tokenBufferIdx   = (size_t)(atStringCharacter - stringStart) - 1L;
         if(JK_EXPECT_F((tokenBufferIdx + 16UL) > parseState->token.tokenBuffer.bytes.length)) { if((tokenBuffer = jk_managedBuffer_resize(&parseState->token.tokenBuffer, tokenBufferIdx + 1024UL)) == NULL) { jk_error(parseState, @"Internal error: Unable to resize temporary buffer. %@ line #%ld", [NSString stringWithUTF8String:__FILE__], (long)__LINE__); stringState = JSONStringStateError; goto finishedParsing; } }
         memcpy(tokenBuffer, stringStart, tokenBufferIdx);
         goto slowMatch;
@@ -1461,7 +1461,7 @@ static int jk_parse_string(JKParseState *parseState) {
 
       if(JK_EXPECT_F(currentChar < 0x20UL)) { jk_error(parseState, @"Invalid character < 0x20 found in string: 0x%2.2x.", currentChar); stringState = JSONStringStateError; goto finishedParsing; }
 
-      stringHash = calculateHash(stringHash, currentChar);
+      stringHash = calculateHash(stringHash, (unsigned char)currentChar);
     }
   }
 
@@ -1479,8 +1479,8 @@ static int jk_parse_string(JKParseState *parseState) {
         if(JK_EXPECT_T(currentChar < (unsigned long)0x80)) { // Not a UTF8 sequence
           if(JK_EXPECT_F(currentChar == (unsigned long)'"'))  { stringState = JSONStringStateFinished; atStringCharacter++; goto finishedParsing; }
           if(JK_EXPECT_F(currentChar == (unsigned long)'\\')) { stringState = JSONStringStateEscape; continue; }
-          stringHash = calculateHash(stringHash, currentChar);
-          tokenBuffer[tokenBufferIdx++] = currentChar;
+          stringHash = calculateHash(stringHash, (unsigned char)currentChar);
+          tokenBuffer[tokenBufferIdx++] = (unsigned char)currentChar;
           continue;
         } else { // UTF8 sequence
           const unsigned char *nextValidCharacter = NULL;
@@ -1522,8 +1522,8 @@ static int jk_parse_string(JKParseState *parseState) {
               
             parsedEscapedChar:
               stringState = JSONStringStateParsing;
-              stringHash  = calculateHash(stringHash, escapedChar);
-              tokenBuffer[tokenBufferIdx++] = escapedChar;
+              stringHash  = calculateHash(stringHash, (unsigned char)escapedChar);
+              tokenBuffer[tokenBufferIdx++] = (unsigned char)escapedChar;
               break;
               
             default: jk_error(parseState, @"Invalid escape sequence found in \"\" string."); stringState = JSONStringStateError; goto finishedParsing; break;
@@ -1552,7 +1552,7 @@ static int jk_parse_string(JKParseState *parseState) {
 		    case '7':
 		    case '8':
 		    case '9':
-			    hexValue =  currentChar - '0';        goto parsedHex;
+			    hexValue =  (uint16_t)(currentChar - '0');        goto parsedHex;
 
 		    case 'a':
 		    case 'b':
@@ -1560,7 +1560,7 @@ static int jk_parse_string(JKParseState *parseState) {
 		    case 'd':
 		    case 'e':
 		    case 'f':
-			    hexValue = (currentChar - 'a') + 10U; goto parsedHex;
+			    hexValue = (uint16_t)(currentChar - 'a' + 10U); goto parsedHex;
 
 		    case 'A':
 		    case 'B':
@@ -1568,10 +1568,10 @@ static int jk_parse_string(JKParseState *parseState) {
 		    case 'D':
 		    case 'E':
 		    case 'F':
-			    hexValue = (currentChar - 'A') + 10U; goto parsedHex;
+			    hexValue = (uint16_t)(currentChar - 'A' + 10U); goto parsedHex;
 
               parsedHex:
-              if(!isSurrogate) { escapedUnicode1 = (escapedUnicode1 << 4) | hexValue; } else { escapedUnicode2 = (escapedUnicode2 << 4) | hexValue; }
+              if(!isSurrogate) { escapedUnicode1 = (uint16_t)((escapedUnicode1 << 4) | hexValue); } else { escapedUnicode2 = (uint16_t)((escapedUnicode2 << 4) | hexValue); }
                 
               if(stringState == JSONStringStateEscapedUnicode4) {
                 if(((escapedUnicode1 >= 0xD800U) && (escapedUnicode1 < 0xE000U))) {
@@ -1632,7 +1632,7 @@ finishedParsing:
     NSCParameterAssert((parseState->stringBuffer.bytes.ptr + tokenStartIndex) < atStringCharacter);
 
     parseState->token.tokenPtrRange.ptr    = parseState->stringBuffer.bytes.ptr + tokenStartIndex;
-    parseState->token.tokenPtrRange.length = (atStringCharacter - parseState->token.tokenPtrRange.ptr);
+    parseState->token.tokenPtrRange.length = (size_t)(atStringCharacter - parseState->token.tokenPtrRange.ptr);
 
     if(JK_EXPECT_T(onlySimpleString)) {
       NSCParameterAssert(((parseState->token.tokenPtrRange.ptr + 1) < endOfBuffer) && (parseState->token.tokenPtrRange.length >= 2UL) && (((parseState->token.tokenPtrRange.ptr + 1) + (parseState->token.tokenPtrRange.length - 2)) < endOfBuffer));
@@ -1645,7 +1645,7 @@ finishedParsing:
     
     parseState->token.value.hash = stringHash;
     parseState->token.value.type = JKValueTypeString;
-    parseState->atIndex          = (atStringCharacter - parseState->stringBuffer.bytes.ptr);
+    parseState->atIndex          = (size_t)(atStringCharacter - parseState->stringBuffer.bytes.ptr);
   }
 
   if(JK_EXPECT_F(stringState != JSONStringStateFinished)) { jk_error(parseState, @"Invalid string."); }
@@ -1683,8 +1683,8 @@ static int jk_parse_number(JKParseState *parseState) {
   }
   
   parseState->token.tokenPtrRange.ptr    = parseState->stringBuffer.bytes.ptr + startingIndex;
-  parseState->token.tokenPtrRange.length = (atNumberCharacter - parseState->token.tokenPtrRange.ptr) - backup;
-  parseState->atIndex                    = (parseState->token.tokenPtrRange.ptr + parseState->token.tokenPtrRange.length) - parseState->stringBuffer.bytes.ptr;
+  parseState->token.tokenPtrRange.length = (size_t)((atNumberCharacter - parseState->token.tokenPtrRange.ptr) - backup);
+  parseState->atIndex                    = (size_t)((parseState->token.tokenPtrRange.ptr + parseState->token.tokenPtrRange.length) - parseState->stringBuffer.bytes.ptr);
 
   if(JK_EXPECT_T(numberState == JSONNumberStateFinished)) {
     unsigned char  numberTempBuf[parseState->token.tokenPtrRange.length + 4UL];
@@ -2030,7 +2030,7 @@ static void *jk_cachedObjects(JKParseState *parseState) {
     if(JK_EXPECT_F(parseState->cache.items[bucket].object == NULL)) { setBucket = 1UL; useableBucket = bucket; break; }
     
     if((JK_EXPECT_T(parseState->cache.items[bucket].hash == parseState->token.value.hash)) && (JK_EXPECT_T(parseState->cache.items[bucket].size == parseState->token.value.ptrRange.length)) && (JK_EXPECT_T(parseState->cache.items[bucket].type == parseState->token.value.type)) && (JK_EXPECT_T(parseState->cache.items[bucket].bytes != NULL)) && (JK_EXPECT_T(memcmp(parseState->cache.items[bucket].bytes, parseState->token.value.ptrRange.ptr, parseState->token.value.ptrRange.length) == 0U))) {
-      parseState->cache.age[bucket]     = (parseState->cache.age[bucket] << 1) | 1U;
+      parseState->cache.age[bucket]     = (unsigned char)((parseState->cache.age[bucket] << 1) | 1);
       parseState->token.value.cacheItem = &parseState->cache.items[bucket];
       NSCParameterAssert(parseState->cache.items[bucket].object != NULL);
       return((void *)CFRetain(parseState->cache.items[bucket].object));
@@ -2044,7 +2044,7 @@ static void *jk_cachedObjects(JKParseState *parseState) {
   }
   
   switch(parseState->token.value.type) {
-    case JKValueTypeString:           parsedAtom = (void *)CFStringCreateWithBytes(NULL, parseState->token.value.ptrRange.ptr, parseState->token.value.ptrRange.length, kCFStringEncodingUTF8, 0); break;
+    case JKValueTypeString:           parsedAtom = (void *)CFStringCreateWithBytes(NULL, parseState->token.value.ptrRange.ptr, (CFIndex)parseState->token.value.ptrRange.length, kCFStringEncodingUTF8, 0); break;
     case JKValueTypeLongLong:         parsedAtom = (void *)CFNumberCreate(NULL, kCFNumberLongLongType, &parseState->token.value.number.longLongValue);                                             break;
     case JKValueTypeUnsignedLongLong:
       if(parseState->token.value.number.unsignedLongLongValue <= LLONG_MAX) { parsedAtom = (void *)CFNumberCreate(NULL, kCFNumberLongLongType, &parseState->token.value.number.unsignedLongLongValue); }
@@ -2353,11 +2353,11 @@ static id _NSStringObjectFromJSONString(NSString *jsonString, JKParseOptionFlags
   CFIndex    stringLength     = CFStringGetLength((CFStringRef)jsonString);
   NSUInteger stringUTF8Length = [jsonString lengthOfBytesUsingEncoding:NSUTF8StringEncoding];
   
-  if((mutableData = (CFMutableDataRef)[(id)CFDataCreateMutable(NULL, (NSUInteger)stringUTF8Length) autorelease]) != NULL) {
+  if((mutableData = (CFMutableDataRef)[(id)CFDataCreateMutable(NULL, (CFIndex)stringUTF8Length) autorelease]) != NULL) {
     UInt8   *utf8String = CFDataGetMutableBytePtr(mutableData);
     CFIndex  usedBytes  = 0L, convertedCount = 0L;
     
-    convertedCount = CFStringGetBytes((CFStringRef)jsonString, CFRangeMake(0L, stringLength), kCFStringEncodingUTF8, '?', NO, utf8String, (NSUInteger)stringUTF8Length, &usedBytes);
+    convertedCount = CFStringGetBytes((CFStringRef)jsonString, CFRangeMake(0L, stringLength), kCFStringEncodingUTF8, '?', NO, utf8String, (CFIndex)stringUTF8Length, &usedBytes);
     if(JK_EXPECT_F(convertedCount != stringLength) || JK_EXPECT_F(usedBytes < 0L)) { if(error != NULL) { *error = [NSError errorWithDomain:@"JKErrorDomain" code:-1L userInfo:[NSDictionary dictionaryWithObject:@"An error occurred converting the contents of a NSString to UTF8." forKey:NSLocalizedDescriptionKey]]; } goto exitNow; }
     
     if(mutableCollection == NO) { returnObject = [(decoder = [JSONDecoder decoderWithParseOptions:parseOptionFlags])        objectWithUTF8String:(const unsigned char *)utf8String length:(size_t)usedBytes error:error]; }
@@ -2485,15 +2485,15 @@ static int jk_encode_printf(JKEncodeState *encodeState, JKEncodeCache *cacheSlot
   int      returnValue           = 0;
 
   if(JK_EXPECT_T((formattedStringLength = vsnprintf((char *)&encodeState->stringBuffer.bytes.ptr[encodeState->atIndex], (encodeState->stringBuffer.bytes.length - encodeState->atIndex), format, varArgsList)) >= (ssize_t)(encodeState->stringBuffer.bytes.length - encodeState->atIndex))) {
-    NSCParameterAssert(((encodeState->atIndex + (formattedStringLength * 2UL) + 256UL) > encodeState->stringBuffer.bytes.length));
-    if(JK_EXPECT_F(((encodeState->atIndex + (formattedStringLength * 2UL) + 256UL) > encodeState->stringBuffer.bytes.length)) && JK_EXPECT_F((jk_managedBuffer_resize(&encodeState->stringBuffer, encodeState->atIndex + (formattedStringLength * 2UL)+ 4096UL) == NULL))) { jk_encode_error(encodeState, @"Unable to resize temporary buffer."); returnValue = 1; goto exitNow; }
+    NSCParameterAssert(((encodeState->atIndex + ((size_t)formattedStringLength * 2UL) + 256UL) > encodeState->stringBuffer.bytes.length));
+    if(JK_EXPECT_F(((encodeState->atIndex + ((size_t)formattedStringLength * 2UL) + 256UL) > encodeState->stringBuffer.bytes.length)) && JK_EXPECT_F((jk_managedBuffer_resize(&encodeState->stringBuffer, encodeState->atIndex + ((size_t)formattedStringLength * 2UL)+ 4096UL) == NULL))) { jk_encode_error(encodeState, @"Unable to resize temporary buffer."); returnValue = 1; goto exitNow; }
     if(JK_EXPECT_F((formattedStringLength = vsnprintf((char *)&encodeState->stringBuffer.bytes.ptr[encodeState->atIndex], (encodeState->stringBuffer.bytes.length - encodeState->atIndex), format, varArgsListCopy)) >= (ssize_t)(encodeState->stringBuffer.bytes.length - encodeState->atIndex))) { jk_encode_error(encodeState, @"vsnprintf failed unexpectedly."); returnValue = 1; goto exitNow; }
   }
   
 exitNow:
   va_end(varArgsList);
   va_end(varArgsListCopy);
-  if(JK_EXPECT_T(returnValue == 0)) { encodeState->atIndex += formattedStringLength; jk_encode_updateCache(encodeState, cacheSlot, startingAtIndex, object); }
+  if(JK_EXPECT_T(returnValue == 0)) { encodeState->atIndex += (size_t)formattedStringLength; jk_encode_updateCache(encodeState, cacheSlot, startingAtIndex, object); }
   return(returnValue);
 }
 
@@ -2502,7 +2502,7 @@ static int jk_encode_write(JKEncodeState *encodeState, JKEncodeCache *cacheSlot,
   if(JK_EXPECT_F(((encodeState->atIndex + strlen(format) + 256UL) > encodeState->stringBuffer.bytes.length)) && JK_EXPECT_F((jk_managedBuffer_resize(&encodeState->stringBuffer, encodeState->atIndex + strlen(format) + 1024UL) == NULL))) { jk_encode_error(encodeState, @"Unable to resize temporary buffer."); return(1); }
 
   size_t formatIdx = 0UL;
-  for(formatIdx = 0UL; format[formatIdx] != 0; formatIdx++) { NSCParameterAssert(encodeState->atIndex < encodeState->stringBuffer.bytes.length); encodeState->stringBuffer.bytes.ptr[encodeState->atIndex++] = format[formatIdx]; }
+  for(formatIdx = 0UL; format[formatIdx] != 0; formatIdx++) { NSCParameterAssert(encodeState->atIndex < encodeState->stringBuffer.bytes.length); encodeState->stringBuffer.bytes.ptr[encodeState->atIndex++] = (unsigned char)format[formatIdx]; }
   jk_encode_updateCache(encodeState, cacheSlot, startingAtIndex, object);
   return(0);
 }
@@ -2519,11 +2519,11 @@ static int jk_encode_writePrettyPrintWhiteSpace(JKEncodeState *encodeState) {
 static int jk_encode_write1slow(JKEncodeState *encodeState, ssize_t depthChange, const char *format) {
   NSCParameterAssert((encodeState != NULL) && (encodeState->atIndex < encodeState->stringBuffer.bytes.length) && (format != NULL) && ((depthChange >= -1L) && (depthChange <= 1L)) && ((encodeState->depth == 0UL) ? (depthChange >= 0L) : 1) && ((encodeState->serializeOptionFlags & JKSerializeOptionPretty) != 0UL));
   if(JK_EXPECT_F((encodeState->atIndex + ((encodeState->depth + 1UL) * 2UL) + 16UL) > encodeState->stringBuffer.bytes.length) && JK_EXPECT_F(jk_managedBuffer_resize(&encodeState->stringBuffer, encodeState->atIndex + ((encodeState->depth + 1UL) * 2UL) + 4096UL) == NULL)) { jk_encode_error(encodeState, @"Unable to resize temporary buffer."); return(1); }
-  encodeState->depth += depthChange;
-  if(JK_EXPECT_T(format[0] == ':')) { encodeState->stringBuffer.bytes.ptr[encodeState->atIndex++] = format[0]; encodeState->stringBuffer.bytes.ptr[encodeState->atIndex++] = ' '; }
+  encodeState->depth += (size_t)depthChange;
+  if(JK_EXPECT_T(format[0] == ':')) { encodeState->stringBuffer.bytes.ptr[encodeState->atIndex++] = (unsigned char)format[0]; encodeState->stringBuffer.bytes.ptr[encodeState->atIndex++] = ' '; }
   else {
     if(JK_EXPECT_F(depthChange == -1L)) { if(JK_EXPECT_F(jk_encode_writePrettyPrintWhiteSpace(encodeState))) { return(1); } }
-    encodeState->stringBuffer.bytes.ptr[encodeState->atIndex++] = format[0];
+    encodeState->stringBuffer.bytes.ptr[encodeState->atIndex++] = (unsigned char)format[0];
     if(JK_EXPECT_T(depthChange != -1L)) { if(JK_EXPECT_F(jk_encode_writePrettyPrintWhiteSpace(encodeState))) { return(1); } }
   }
   NSCParameterAssert(encodeState->atIndex < encodeState->stringBuffer.bytes.length);
@@ -2532,7 +2532,7 @@ static int jk_encode_write1slow(JKEncodeState *encodeState, ssize_t depthChange,
 
 static int jk_encode_write1fast(JKEncodeState *encodeState, ssize_t depthChange JK_UNUSED_ARG, const char *format) {
   NSCParameterAssert((encodeState != NULL) && (encodeState->atIndex < encodeState->stringBuffer.bytes.length) && ((encodeState->serializeOptionFlags & JKSerializeOptionPretty) == 0UL));
-  if(JK_EXPECT_T((encodeState->atIndex + 4UL) < encodeState->stringBuffer.bytes.length)) { encodeState->stringBuffer.bytes.ptr[encodeState->atIndex++] = format[0]; }
+  if(JK_EXPECT_T((encodeState->atIndex + 4UL) < encodeState->stringBuffer.bytes.length)) { encodeState->stringBuffer.bytes.ptr[encodeState->atIndex++] = (unsigned char)format[0]; }
   else { return(jk_encode_write(encodeState, NULL, 0UL, NULL, format)); }
   return(0);
 }
@@ -2659,7 +2659,7 @@ static int jk_encode_add_atom_to_buffer(JKEncodeState *encodeState, void *object
             size_t               utf8Idx    = 0UL;
 
             CFIndex stringLength = CFStringGetLength((CFStringRef)object);
-            if(JK_EXPECT_F(((encodeState->atIndex + (stringLength * 2UL) + 256UL) > encodeState->stringBuffer.bytes.length)) && JK_EXPECT_F((jk_managedBuffer_resize(&encodeState->stringBuffer, encodeState->atIndex + (stringLength * 2UL) + 1024UL) == NULL))) { jk_encode_error(encodeState, @"Unable to resize temporary buffer."); return(1); }
+            if(JK_EXPECT_F(((encodeState->atIndex + ((size_t)stringLength * 2UL) + 256UL) > encodeState->stringBuffer.bytes.length)) && JK_EXPECT_F((jk_managedBuffer_resize(&encodeState->stringBuffer, encodeState->atIndex + ((size_t)stringLength * 2UL) + 1024UL) == NULL))) { jk_encode_error(encodeState, @"Unable to resize temporary buffer."); return(1); }
 
             if(JK_EXPECT_T((encodeState->encodeOption & JKEncodeOptionStringObjTrimQuotes) == 0UL)) { encodeState->stringBuffer.bytes.ptr[encodeState->atIndex++] = '\"'; }
             for(utf8Idx = 0UL; utf8String[utf8Idx] != 0U; utf8Idx++) {
@@ -2692,13 +2692,13 @@ static int jk_encode_add_atom_to_buffer(JKEncodeState *encodeState, void *object
           CFIndex stringLength        = CFStringGetLength((CFStringRef)object);
           CFIndex maxStringUTF8Length = CFStringGetMaximumSizeForEncoding(stringLength, kCFStringEncodingUTF8) + 32L;
         
-          if(JK_EXPECT_F((size_t)maxStringUTF8Length > encodeState->utf8ConversionBuffer.bytes.length) && JK_EXPECT_F(jk_managedBuffer_resize(&encodeState->utf8ConversionBuffer, maxStringUTF8Length + 1024UL) == NULL)) { jk_encode_error(encodeState, @"Unable to resize temporary buffer."); return(1); }
+          if(JK_EXPECT_F((size_t)maxStringUTF8Length > encodeState->utf8ConversionBuffer.bytes.length) && JK_EXPECT_F(jk_managedBuffer_resize(&encodeState->utf8ConversionBuffer, (size_t)maxStringUTF8Length + 1024UL) == NULL)) { jk_encode_error(encodeState, @"Unable to resize temporary buffer."); return(1); }
         
           CFIndex usedBytes = 0L, convertedCount = 0L;
-          convertedCount = CFStringGetBytes((CFStringRef)object, CFRangeMake(0L, stringLength), kCFStringEncodingUTF8, '?', NO, encodeState->utf8ConversionBuffer.bytes.ptr, encodeState->utf8ConversionBuffer.bytes.length - 16L, &usedBytes);
+          convertedCount = CFStringGetBytes((CFStringRef)object, CFRangeMake(0L, stringLength), kCFStringEncodingUTF8, '?', NO, encodeState->utf8ConversionBuffer.bytes.ptr, (CFIndex)encodeState->utf8ConversionBuffer.bytes.length - 16L, &usedBytes);
           if(JK_EXPECT_F(convertedCount != stringLength) || JK_EXPECT_F(usedBytes < 0L)) { jk_encode_error(encodeState, @"An error occurred converting the contents of a NSString to UTF8."); return(1); }
         
-          if(JK_EXPECT_F((encodeState->atIndex + (maxStringUTF8Length * 2UL) + 256UL) > encodeState->stringBuffer.bytes.length) && JK_EXPECT_F(jk_managedBuffer_resize(&encodeState->stringBuffer, encodeState->atIndex + (maxStringUTF8Length * 2UL) + 1024UL) == NULL)) { jk_encode_error(encodeState, @"Unable to resize temporary buffer."); return(1); }
+          if(JK_EXPECT_F((encodeState->atIndex + ((size_t)maxStringUTF8Length * 2UL) + 256UL) > encodeState->stringBuffer.bytes.length) && JK_EXPECT_F(jk_managedBuffer_resize(&encodeState->stringBuffer, encodeState->atIndex + ((size_t)maxStringUTF8Length * 2UL) + 1024UL) == NULL)) { jk_encode_error(encodeState, @"Unable to resize temporary buffer."); return(1); }
         
           const unsigned char *utf8String = encodeState->utf8ConversionBuffer.bytes.ptr;
         
@@ -2725,7 +2725,7 @@ static int jk_encode_add_atom_to_buffer(JKEncodeState *encodeState, void *object
 
                 if(JK_EXPECT_F((result = ConvertSingleCodePointInUTF8(&utf8String[utf8Idx], &utf8String[usedBytes], (UTF8 const **)&nextValidCharacter, &u32ch)) != conversionOK)) { jk_encode_error(encodeState, @"Error converting UTF8."); return(1); }
                 else {
-                  utf8Idx = (nextValidCharacter - utf8String) - 1UL;
+                  utf8Idx = (size_t)(nextValidCharacter - utf8String) - 1UL;
                   if(JK_EXPECT_T(u32ch <= 0xffffU)) { if(JK_EXPECT_F(jk_encode_printf(encodeState, NULL, 0UL, NULL, "\\u%4.4x", u32ch)))                                                           { return(1); } }
                   else                              { if(JK_EXPECT_F(jk_encode_printf(encodeState, NULL, 0UL, NULL, "\\u%4.4x\\u%4.4x", (0xd7c0U + (u32ch >> 10)), (0xdc00U + (u32ch & 0x3ffU))))) { return(1); } }
                 }
@@ -2759,17 +2759,17 @@ static int jk_encode_add_atom_to_buffer(JKEncodeState *encodeState, void *object
         switch(objCType[0]) {
           case 'c': case 'i': case 's': case 'l': case 'q':
             if(JK_EXPECT_T(CFNumberGetValue((CFNumberRef)object, kCFNumberLongLongType, &llv)))  {
-              if(llv < 0LL)  { ullv = -llv; isNegative = 1; } else { ullv = llv; isNegative = 0; }
+              if(llv < 0LL)  { ullv = (unsigned long long)-llv; isNegative = 1; } else { ullv = (unsigned long long)llv; isNegative = 0; }
               goto convertNumber;
             } else { jk_encode_error(encodeState, @"Unable to get scalar value from number object."); return(1); }
             break;
           case 'C': case 'I': case 'S': case 'L': case 'Q': case 'B':
             if(JK_EXPECT_T(CFNumberGetValue((CFNumberRef)object, kCFNumberLongLongType, &ullv))) {
             convertNumber:
-              if(JK_EXPECT_F(ullv < 10ULL)) { *--aptr = ullv + '0'; } else { while(JK_EXPECT_T(ullv > 0ULL)) { *--aptr = (ullv % 10ULL) + '0'; ullv /= 10ULL; NSCParameterAssert(aptr > anum); } }
+              if(JK_EXPECT_F(ullv < 10ULL)) { *--aptr = (char)(ullv + '0'); } else { while(JK_EXPECT_T(ullv > 0ULL)) { *--aptr = (char)((ullv % 10ULL) + '0'); ullv /= 10ULL; NSCParameterAssert(aptr > anum); } }
               if(isNegative) { *--aptr = '-'; }
               NSCParameterAssert(aptr > anum);
-              return(jk_encode_writen(encodeState, cacheSlot, startingAtIndex, encodeCacheObject, aptr, &anum[255] - aptr));
+              return(jk_encode_writen(encodeState, cacheSlot, startingAtIndex, encodeCacheObject, aptr, (size_t)(&anum[255] - aptr)));
             } else { jk_encode_error(encodeState, @"Unable to get scalar value from number object."); return(1); }
             break;
           case 'f': case 'd':
