@@ -198,7 +198,7 @@
 #define JK_EXPECT_F(cond)               JK_EXPECTED(cond, 0U)
 #define JK_PREFETCH(ptr)                __builtin_prefetch(ptr)
 #else  // defined (__GNUC__) && (__GNUC__ >= 4) && !defined(__STRICT_ANSI__)
-#define JK_ATTRIBUTES(attr, ...)
+#define JK_ATTRIBUTES(...)
 #define JK_EXPECTED(cond, expect)       (cond)
 #define JK_EXPECT_T(cond)               (cond)
 #define JK_EXPECT_F(cond)               (cond)
