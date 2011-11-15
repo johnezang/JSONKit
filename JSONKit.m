@@ -189,20 +189,21 @@
 
 #define JK_ENCODE_CACHE_SLOTS  (1024UL)
 
-
-#if       defined (__GNUC__) && (__GNUC__ >= 4)
+// __STRICT_ANSI__ check required since clang will still define __GNUC__ even when
+// we are compiling with -pedantic
+#if       defined (__GNUC__) && (__GNUC__ >= 4) && !defined(__STRICT_ANSI__)
 #define JK_ATTRIBUTES(attr, ...)        __attribute__((attr, ##__VA_ARGS__))
 #define JK_EXPECTED(cond, expect)       __builtin_expect((long)(cond), (expect))
 #define JK_EXPECT_T(cond)               JK_EXPECTED(cond, 1U)
 #define JK_EXPECT_F(cond)               JK_EXPECTED(cond, 0U)
 #define JK_PREFETCH(ptr)                __builtin_prefetch(ptr)
-#else  // defined (__GNUC__) && (__GNUC__ >= 4) 
+#else  // defined (__GNUC__) && (__GNUC__ >= 4) && !defined(__STRICT_ANSI__)
 #define JK_ATTRIBUTES(attr, ...)
 #define JK_EXPECTED(cond, expect)       (cond)
 #define JK_EXPECT_T(cond)               (cond)
 #define JK_EXPECT_F(cond)               (cond)
 #define JK_PREFETCH(ptr)
-#endif // defined (__GNUC__) && (__GNUC__ >= 4) 
+#endif // defined (__GNUC__) && (__GNUC__ >= 4) && !defined(__STRICT_ANSI__)
 
 #define JK_STATIC_INLINE                         static __inline__ JK_ATTRIBUTES(always_inline)
 #define JK_ALIGNED(arg)                                            JK_ATTRIBUTES(aligned(arg))
