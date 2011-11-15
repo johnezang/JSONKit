@@ -1154,19 +1154,19 @@ static void jk_error(JKParseState *parseState, NSString *format, ...) {
 static void jk_managedBuffer_release(JKManagedBuffer *managedBuffer) {
   if((managedBuffer->flags & JKManagedBufferMustFree)) {
     if(managedBuffer->bytes.ptr != NULL) { free(managedBuffer->bytes.ptr); managedBuffer->bytes.ptr = NULL; }
-    managedBuffer->flags &= ~JKManagedBufferMustFree;
+    managedBuffer->flags &= (JKManagedBufferFlags)~JKManagedBufferMustFree;
   }
 
   managedBuffer->bytes.ptr     = NULL;
   managedBuffer->bytes.length  = 0UL;
-  managedBuffer->flags        &= ~JKManagedBufferLocationMask;
+  managedBuffer->flags        &= (JKManagedBufferFlags)~JKManagedBufferLocationMask;
 }
 
 static void jk_managedBuffer_setToStackBuffer(JKManagedBuffer *managedBuffer, unsigned char *ptr, size_t length) {
   jk_managedBuffer_release(managedBuffer);
   managedBuffer->bytes.ptr     = ptr;
   managedBuffer->bytes.length  = length;
-  managedBuffer->flags         = (managedBuffer->flags & ~JKManagedBufferLocationMask) | JKManagedBufferOnStack;
+  managedBuffer->flags         = (managedBuffer->flags & (JKManagedBufferFlags)~JKManagedBufferLocationMask) | JKManagedBufferOnStack;
 }
 
 static unsigned char *jk_managedBuffer_resize(JKManagedBuffer *managedBuffer, size_t newSize) {
@@ -1181,7 +1181,7 @@ static unsigned char *jk_managedBuffer_resize(JKManagedBuffer *managedBuffer, si
       
       if((newBuffer = (unsigned char *)malloc(roundedUpNewSize)) == NULL) { return(NULL); }
       memcpy(newBuffer, oldBuffer, jk_min(managedBuffer->bytes.length, roundedUpNewSize));
-      managedBuffer->flags        = (managedBuffer->flags & ~JKManagedBufferLocationMask) | (JKManagedBufferOnHeap | JKManagedBufferMustFree);
+      managedBuffer->flags        = (managedBuffer->flags & (JKManagedBufferFlags)~JKManagedBufferLocationMask) | (JKManagedBufferOnHeap | JKManagedBufferMustFree);
       managedBuffer->bytes.ptr    = newBuffer;
       managedBuffer->bytes.length = roundedUpNewSize;
     } else {
@@ -1212,7 +1212,7 @@ static void jk_objectStack_release(JKObjectStack *objectStack) {
     if(objectStack->objects  != NULL) { free(objectStack->objects);  objectStack->objects  = NULL; }
     if(objectStack->keys     != NULL) { free(objectStack->keys);     objectStack->keys     = NULL; }
     if(objectStack->cfHashes != NULL) { free(objectStack->cfHashes); objectStack->cfHashes = NULL; }
-    objectStack->flags &= ~JKObjectStackMustFree;
+    objectStack->flags &= (JKObjectStackFlags)~JKObjectStackMustFree;
   }
 
   objectStack->objects  = NULL;
@@ -1220,7 +1220,7 @@ static void jk_objectStack_release(JKObjectStack *objectStack) {
   objectStack->cfHashes = NULL;
 
   objectStack->count    = 0UL;
-  objectStack->flags   &= ~JKObjectStackLocationMask;
+  objectStack->flags   &= (JKObjectStackFlags)~JKObjectStackLocationMask;
 }
 
 static void jk_objectStack_setToStackBuffer(JKObjectStack *objectStack, void **objects, void **keys, CFHashCode *cfHashes, size_t count) {
@@ -1230,7 +1230,7 @@ static void jk_objectStack_setToStackBuffer(JKObjectStack *objectStack, void **o
   objectStack->keys     = keys;
   objectStack->cfHashes = cfHashes;
   objectStack->count    = count;
-  objectStack->flags    = (objectStack->flags & ~JKObjectStackLocationMask) | JKObjectStackOnStack;
+  objectStack->flags    = (objectStack->flags & (JKObjectStackFlags)~JKObjectStackLocationMask) | JKObjectStackOnStack;
 #ifndef NS_BLOCK_ASSERTIONS
   size_t idx;
   for(idx = 0UL; idx < objectStack->count; idx++) { objectStack->objects[idx] = NULL; objectStack->keys[idx] = NULL; objectStack->cfHashes[idx] = 0UL; }
@@ -1258,7 +1258,7 @@ static int jk_objectStack_resize(JKObjectStack *objectStack, size_t newCount) {
       if((newCFHashes = (CFHashCode *)calloc(1UL, roundedUpNewCount * sizeof(CFHashCode))) == NULL) { returnCode = 1; goto errorExit; }
       memcpy(newCFHashes, objectStack->cfHashes, jk_min(objectStack->count, roundedUpNewCount) * sizeof(CFHashCode));
 
-      objectStack->flags    = (objectStack->flags & ~JKObjectStackLocationMask) | (JKObjectStackOnHeap | JKObjectStackMustFree);
+      objectStack->flags    = (objectStack->flags & (JKObjectStackFlags)~JKObjectStackLocationMask) | (JKObjectStackOnHeap | JKObjectStackMustFree);
       objectStack->objects  = newObjects;  newObjects  = NULL;
       objectStack->keys     = newKeys;     newKeys     = NULL;
       objectStack->cfHashes = newCFHashes; newCFHashes = NULL;
@@ -2095,7 +2095,7 @@ static void *jk_object_for_token(JKParseState *parseState) {
 {
   if((self = [super init]) == NULL) { return(NULL); }
 
-  if(parseOptionFlags & ~JKParseOptionValidFlags) { [self autorelease]; [NSException raise:NSInvalidArgumentException format:@"Invalid parse options."]; }
+  if(parseOptionFlags & (JKParseOptionFlags)~JKParseOptionValidFlags) { [self autorelease]; [NSException raise:NSInvalidArgumentException format:@"Invalid parse options."]; }
 
   if((parseState = (JKParseState *)calloc(1UL, sizeof(JKParseState))) == NULL) { goto errorExit; }
 
@@ -2888,7 +2888,7 @@ static int jk_encode_add_atom_to_buffer(JKEncodeState *encodeState, void *object
       default: jk_encode_error(encodeState, @"Unknown encode as type."); break;
     }
 
-    if((returnObject != NULL) && (stackBuffer == NO)) { encodeState->stringBuffer.flags &= ~JKManagedBufferMustFree; encodeState->stringBuffer.bytes.ptr = NULL; encodeState->stringBuffer.bytes.length = 0UL; }
+    if((returnObject != NULL) && (stackBuffer == NO)) { encodeState->stringBuffer.flags &= (JKManagedBufferFlags)~JKManagedBufferMustFree; encodeState->stringBuffer.bytes.ptr = NULL; encodeState->stringBuffer.bytes.length = 0UL; }
   }
 
 errorExit:
