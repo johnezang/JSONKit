@@ -1542,10 +1542,34 @@ static int jk_parse_string(JKParseState *parseState) {
             uint16_t hexValue = 0U;
 
             switch(currentChar) {
-              case '0' ... '9': hexValue =  currentChar - '0';        goto parsedHex;
-              case 'a' ... 'f': hexValue = (currentChar - 'a') + 10U; goto parsedHex;
-              case 'A' ... 'F': hexValue = (currentChar - 'A') + 10U; goto parsedHex;
-                
+		    case '0':
+		    case '1':
+		    case '2':
+		    case '3':
+		    case '4':
+		    case '5':
+		    case '6':
+		    case '7':
+		    case '8':
+		    case '9':
+			    hexValue =  currentChar - '0';        goto parsedHex;
+
+		    case 'a':
+		    case 'b':
+		    case 'c':
+		    case 'd':
+		    case 'e':
+		    case 'f':
+			    hexValue = (currentChar - 'a') + 10U; goto parsedHex;
+
+		    case 'A':
+		    case 'B':
+		    case 'C':
+		    case 'D':
+		    case 'E':
+		    case 'F':
+			    hexValue = (currentChar - 'A') + 10U; goto parsedHex;
+
               parsedHex:
               if(!isSurrogate) { escapedUnicode1 = (escapedUnicode1 << 4) | hexValue; } else { escapedUnicode2 = (escapedUnicode2 << 4) | hexValue; }
                 
