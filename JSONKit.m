@@ -1946,8 +1946,8 @@ static id json_parse_it(JKParseState *parseState) {
       if((JK_EXPECT_T(stopParsing == 0)) && (JK_EXPECT_T((stopParsing = jk_parse_next_token(parseState)) == 0))) {
         switch(parseState->token.type) {
           case JKTokenTypeArrayBegin:
-          case JKTokenTypeObjectBegin: parsedObject = [(id)jk_object_for_token(parseState) autorelease]; stopParsing = 1; break;
-          default:                     jk_error(parseState, @"Expected either '[' or '{'.");             stopParsing = 1; break;
+          case JKTokenTypeObjectBegin: parsedObject = [(id)jk_object_for_token(parseState) autorelease];                                            stopParsing = 1; break;
+          default:                     jk_error(parseState, @"Expected either '[' or '{'.");                                                        stopParsing = 1; break;
         }
       }
     }
@@ -1961,8 +1961,8 @@ static id json_parse_it(JKParseState *parseState) {
         case JKTokenTypeString:
         case JKTokenTypeTrue:
         case JKTokenTypeFalse:
-        case JKTokenTypeNull:         parsedObject = [(id)jk_object_for_token(parseState) autorelease]; stopParsing = 1; break;
-        default:                      jk_error(parseState, @"Expected either '[' or '{'.");             stopParsing = 1; break;
+        case JKTokenTypeNull:         parsedObject = [(id)jk_object_for_token(parseState) autorelease];                                             stopParsing = 1; break;
+        default:                      jk_error(parseState, @"Unexpected token, wanted '{', '[', 'true', 'false', 'null', '\"STRING\"', 'NUMBER'."); stopParsing = 1; break;
       }
     }    
   }
