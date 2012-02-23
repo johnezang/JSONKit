@@ -1647,7 +1647,7 @@ static int jk_parse_number(JKParseState *parseState) {
       case JSONNumberStateExponentPlusMinus:if(!((currentChar >= '0') && (currentChar <= '9'))) { /* XXX Add error message */                        numberState = JSONNumberStateError;                                      break; }
                                        else {                                              if(numberState == JSONNumberStateFractionalNumberStart) { numberState = JSONNumberStateFractionalNumber; }
                                                                                            else                                                    { numberState = JSONNumberStateExponent;         }                         break; }
-      case JSONNumberStateWholeNumberZero:  if   ((currentChar >= '0') && (currentChar <= '7'))                                                    { numberState = JSONNumberStateWholeNumber;           isOctal = 1;         break; }
+      case JSONNumberStateWholeNumberZero:  if   ((currentChar >= '0') && (currentChar <= '7'))                                                    { numberState = JSONNumberStateWholeNumber;           isOctal = 1;                }
                                        else if   (lowerCaseCC == 'x')                                                                              { numberState = JSONNumberStateWholeNumber;             isHex = 1;         break; }
 
       case JSONNumberStateWholeNumber:      if   (currentChar == '.')                                                                              { numberState = JSONNumberStateFractionalNumberStart; isFloatingPoint = 1; break; }
