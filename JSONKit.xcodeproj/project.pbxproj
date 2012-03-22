@@ -12,11 +12,11 @@
 		FF586C061519B83900F308E2 /* InfoPlist.strings in Resources */ = {isa = PBXBuildFile; fileRef = FF586C001519B83900F308E2 /* InfoPlist.strings */; };
 		FF586C071519B83900F308E2 /* JSONKit-Prefix.pch in Headers */ = {isa = PBXBuildFile; fileRef = FF586C021519B83900F308E2 /* JSONKit-Prefix.pch */; };
 		FF586C081519B83900F308E2 /* JSONKit.h in Headers */ = {isa = PBXBuildFile; fileRef = FF586C031519B83900F308E2 /* JSONKit.h */; };
-		FF586C091519B83900F308E2 /* JSONKit.m in Sources */ = {isa = PBXBuildFile; fileRef = FF586C041519B83900F308E2 /* JSONKit.m */; };
+		FF586C091519B83900F308E2 /* JSONKit.m in Sources */ = {isa = PBXBuildFile; fileRef = FF586C041519B83900F308E2 /* JSONKit.m */; settings = {COMPILER_FLAGS = "-Wno-deprecated-objc-isa-usage"; }; };
 		FF586C0A1519B83900F308E2 /* JSONKitX-Info.plist in Resources */ = {isa = PBXBuildFile; fileRef = FF586C051519B83900F308E2 /* JSONKitX-Info.plist */; };
 		FF586C0B1519B84300F308E2 /* JSONKit-Prefix.pch in Headers */ = {isa = PBXBuildFile; fileRef = FF586C021519B83900F308E2 /* JSONKit-Prefix.pch */; };
 		FF586C0C1519B84700F308E2 /* JSONKit.h in Headers */ = {isa = PBXBuildFile; fileRef = FF586C031519B83900F308E2 /* JSONKit.h */; };
-		FF586C0D1519B84900F308E2 /* JSONKit.m in Sources */ = {isa = PBXBuildFile; fileRef = FF586C041519B83900F308E2 /* JSONKit.m */; };
+		FF586C0D1519B84900F308E2 /* JSONKit.m in Sources */ = {isa = PBXBuildFile; fileRef = FF586C041519B83900F308E2 /* JSONKit.m */; settings = {COMPILER_FLAGS = "-Wno-deprecated-objc-isa-usage"; }; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -368,6 +368,7 @@
 				FF586BFD1519B7B700F308E2 /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
 		};
 /* End XCConfigurationList section */
 	};
