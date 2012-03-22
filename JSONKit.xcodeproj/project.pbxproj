@@ -8,7 +8,6 @@
 
 /* Begin PBXBuildFile section */
 		FF586BCF1519B72600F308E2 /* Foundation.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = FF586BCE1519B72600F308E2 /* Foundation.framework */; };
-		FF586BEC1519B7B700F308E2 /* Cocoa.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = FF586BEB1519B7B700F308E2 /* Cocoa.framework */; };
 		FF586C061519B83900F308E2 /* InfoPlist.strings in Resources */ = {isa = PBXBuildFile; fileRef = FF586C001519B83900F308E2 /* InfoPlist.strings */; };
 		FF586C071519B83900F308E2 /* JSONKit-Prefix.pch in Headers */ = {isa = PBXBuildFile; fileRef = FF586C021519B83900F308E2 /* JSONKit-Prefix.pch */; };
 		FF586C081519B83900F308E2 /* JSONKit.h in Headers */ = {isa = PBXBuildFile; fileRef = FF586C031519B83900F308E2 /* JSONKit.h */; };
@@ -17,21 +16,19 @@
 		FF586C0B1519B84300F308E2 /* JSONKit-Prefix.pch in Headers */ = {isa = PBXBuildFile; fileRef = FF586C021519B83900F308E2 /* JSONKit-Prefix.pch */; };
 		FF586C0C1519B84700F308E2 /* JSONKit.h in Headers */ = {isa = PBXBuildFile; fileRef = FF586C031519B83900F308E2 /* JSONKit.h */; };
 		FF586C0D1519B84900F308E2 /* JSONKit.m in Sources */ = {isa = PBXBuildFile; fileRef = FF586C041519B83900F308E2 /* JSONKit.m */; settings = {COMPILER_FLAGS = "-Wno-deprecated-objc-isa-usage"; }; };
+		FFB2F6C5151BA8F300FF2AA4 /* Foundation.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = FFB2F6C4151BA8F300FF2AA4 /* Foundation.framework */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
 		FF586BCB1519B72600F308E2 /* libJSONKitTouch.a */ = {isa = PBXFileReference; explicitFileType = archive.ar; includeInIndex = 0; path = libJSONKitTouch.a; sourceTree = BUILT_PRODUCTS_DIR; };
 		FF586BCE1519B72600F308E2 /* Foundation.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Foundation.framework; path = System/Library/Frameworks/Foundation.framework; sourceTree = SDKROOT; };
 		FF586BEA1519B7B700F308E2 /* JSONKitX.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = JSONKitX.framework; sourceTree = BUILT_PRODUCTS_DIR; };
-		FF586BEB1519B7B700F308E2 /* Cocoa.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Cocoa.framework; path = Library/Frameworks/Cocoa.framework; sourceTree = DEVELOPER_DIR; };
-		FF586BEE1519B7B700F308E2 /* AppKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = AppKit.framework; path = Library/Frameworks/AppKit.framework; sourceTree = SDKROOT; };
-		FF586BEF1519B7B700F308E2 /* CoreData.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = CoreData.framework; path = Library/Frameworks/CoreData.framework; sourceTree = SDKROOT; };
-		FF586BF01519B7B700F308E2 /* Foundation.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Foundation.framework; path = Library/Frameworks/Foundation.framework; sourceTree = SDKROOT; };
 		FF586C011519B83900F308E2 /* en */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = en; path = InfoPlist.strings; sourceTree = "<group>"; };
 		FF586C021519B83900F308E2 /* JSONKit-Prefix.pch */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = "JSONKit-Prefix.pch"; path = "JSONKit/JSONKit-Prefix.pch"; sourceTree = "<group>"; };
 		FF586C031519B83900F308E2 /* JSONKit.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = JSONKit.h; path = JSONKit/JSONKit.h; sourceTree = "<group>"; };
 		FF586C041519B83900F308E2 /* JSONKit.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; name = JSONKit.m; path = JSONKit/JSONKit.m; sourceTree = "<group>"; };
 		FF586C051519B83900F308E2 /* JSONKitX-Info.plist */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.plist.xml; name = "JSONKitX-Info.plist"; path = "JSONKit/JSONKitX-Info.plist"; sourceTree = "<group>"; };
+		FFB2F6C4151BA8F300FF2AA4 /* Foundation.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Foundation.framework; path = Platforms/MacOSX.platform/Developer/SDKs/MacOSX10.8.sdk/System/Library/Frameworks/Foundation.framework; sourceTree = DEVELOPER_DIR; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -47,7 +44,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				FF586BEC1519B7B700F308E2 /* Cocoa.framework in Frameworks */,
+				FFB2F6C5151BA8F300FF2AA4 /* Foundation.framework in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -80,20 +77,9 @@
 			isa = PBXGroup;
 			children = (
 				FF586BCE1519B72600F308E2 /* Foundation.framework */,
-				FF586BEB1519B7B700F308E2 /* Cocoa.framework */,
-				FF586BED1519B7B700F308E2 /* Other Frameworks */,
+				FFB2F6C4151BA8F300FF2AA4 /* Foundation.framework */,
 			);
 			name = Frameworks;
-			sourceTree = "<group>";
-		};
-		FF586BED1519B7B700F308E2 /* Other Frameworks */ = {
-			isa = PBXGroup;
-			children = (
-				FF586BEE1519B7B700F308E2 /* AppKit.framework */,
-				FF586BEF1519B7B700F308E2 /* CoreData.framework */,
-				FF586BF01519B7B700F308E2 /* Foundation.framework */,
-			);
-			name = "Other Frameworks";
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
