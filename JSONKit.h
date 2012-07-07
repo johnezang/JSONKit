@@ -121,7 +121,8 @@ enum {
   JKParseOptionUnicodeNewlines          = (1 << 1),
   JKParseOptionLooseUnicode             = (1 << 2),
   JKParseOptionPermitTextAfterValidJSON = (1 << 3),
-  JKParseOptionValidFlags               = (JKParseOptionComments | JKParseOptionUnicodeNewlines | JKParseOptionLooseUnicode | JKParseOptionPermitTextAfterValidJSON),
+  JKParseOptionPermitFragment           = (1 << 5),
+  JKParseOptionValidFlags               = (JKParseOptionComments | JKParseOptionUnicodeNewlines | JKParseOptionLooseUnicode | JKParseOptionPermitTextAfterValidJSON | JKParseOptionPermitFragment),
 };
 typedef JKFlags JKParseOptionFlags;
 
