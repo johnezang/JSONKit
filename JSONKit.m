@@ -790,6 +790,10 @@ static void _JKArrayRemoveObjectAtIndex(JKArray *array, NSUInteger objectIndex) 
   mutations = (mutations == NSUIntegerMax) ? 1UL : mutations + 1UL;
 }
 
+- (void)addObject:(id)anObject {
+  [self insertObject: anObject atIndex: count];
+}
+
 - (void)replaceObjectAtIndex:(NSUInteger)objectIndex withObject:(id)anObject
 {
   if(mutations   == 0UL)   { [NSException raise:NSInternalInconsistencyException format:@"*** -[%@ %@]: mutating method sent to immutable object", NSStringFromClass([self class]), NSStringFromSelector(_cmd)]; }
@@ -2596,7 +2600,7 @@ static int jk_encode_add_atom_to_buffer(JKEncodeState *encodeState, void *object
 
 
   BOOL   workAroundMacOSXABIBreakingBug = (JK_EXPECT_F(((NSUInteger)object) & 0x1))     ? YES  : NO;
-  void  *objectISA                      = (JK_EXPECT_F(workAroundMacOSXABIBreakingBug)) ? NULL : *((void **)objectPtr);
+  void  *objectISA                      = (JK_EXPECT_F(workAroundMacOSXABIBreakingBug)) ? NULL : *((void **)object);
   if(JK_EXPECT_F(workAroundMacOSXABIBreakingBug)) { goto slowClassLookup; }
 
        if(JK_EXPECT_T(objectISA == encodeState->fastClassLookup.stringClass))     { isClass = JKClassString;     }
