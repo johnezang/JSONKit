@@ -103,6 +103,7 @@
 #include <string.h>
 #include <assert.h>
 #include <sys/errno.h>
+#include <cmath>
 #include <math.h>
 #include <limits.h>
 #include <objc/runtime.h>
