@@ -564,7 +564,7 @@ static void              _JKDictionaryAddObject(JKDictionary *dictionary, NSUInt
 static JKHashTableEntry *_JKDictionaryHashTableEntryForKey(JKDictionary *dictionary, id aKey);
 
 
-static void _JSONDecoderCleanup(JSONDecoder *decoder);
+static void _JSONDecoderCleanup(JKJSONDecoder *decoder);
 
 static id _NSStringObjectFromJSONString(NSString *jsonString, JKParseOptionFlags parseOptionFlags, NSError **error, BOOL mutableCollection);
 
@@ -627,7 +627,7 @@ static size_t                              _JKArrayInstanceSize                 
 static Class                               _JKDictionaryClass                      = NULL;
 static size_t                              _JKDictionaryInstanceSize               = 0UL;
 
-// For JSONDecoder...
+// For JKJSONDecoder...
 static Class                               _jk_NSNumberClass                       = NULL;
 static NSNumberAllocImp                    _jk_NSNumberAllocImp                    = NULL;
 static NSNumberInitWithUnsignedLongLongImp _jk_NSNumberInitWithUnsignedLongLongImp = NULL;
@@ -643,7 +643,7 @@ void jk_collectionClassLoadTimeInitialization(void) {
   _JKDictionaryClass        = objc_getClass("JKDictionary");
   _JKDictionaryInstanceSize = jk_max(16UL, class_getInstanceSize(_JKDictionaryClass));
   
-  // For JSONDecoder...
+  // For JKJSONDecoder...
   _jk_NSNumberClass = [NSNumber class];
   _jk_NSNumberAllocImp = (NSNumberAllocImp)[NSNumber methodForSelector:@selector(alloc)];
   
@@ -2075,7 +2075,7 @@ static void *jk_object_for_token(JKParseState *parseState) {
 }
 
 #pragma mark -
-@implementation JSONDecoder
+@implementation JKJSONDecoder
 
 + (id)decoder
 {
@@ -2120,8 +2120,8 @@ static void *jk_object_for_token(JKParseState *parseState) {
   return(NULL);
 }
 
-// This is here primarily to support the NSString and NSData convenience functions so the autoreleased JSONDecoder can release most of its resources before the pool pops.
-static void _JSONDecoderCleanup(JSONDecoder *decoder) {
+// This is here primarily to support the NSString and NSData convenience functions so the autoreleased JKJSONDecoder can release most of its resources before the pool pops.
+static void _JSONDecoderCleanup(JKJSONDecoder *decoder) {
   if((decoder != NULL) && (decoder->parseState != NULL)) {
     jk_managedBuffer_release(&decoder->parseState->token.tokenBuffer);
     jk_objectStack_release(&decoder->parseState->objectStack);
@@ -2293,12 +2293,12 @@ static id _JKParseUTF8String(JKParseState *parseState, BOOL mutableCollections, 
  const unsigned char *utf8String = (const unsigned char *)[self UTF8String];
  if(utf8String == NULL) { return(NULL); }
  size_t               utf8Length = strlen((const char *)utf8String); 
- return([[JSONDecoder decoderWithParseOptions:parseOptionFlags] parseUTF8String:utf8String length:utf8Length error:error]);
+ return([[JKJSONDecoder decoderWithParseOptions:parseOptionFlags] parseUTF8String:utf8String length:utf8Length error:error]);
  
  This changed with v1.4 to a more complicated method.  The reason for this is to keep the amount of memory that is
  allocated, but not yet freed because it is dependent on the autorelease pool to pop before it can be reclaimed.
  
- In the simpler v1.3 code, this included all the bytes used to store the -UTF8String along with the JSONDecoder and all its overhead.
+ In the simpler v1.3 code, this included all the bytes used to store the -UTF8String along with the JKJSONDecoder and all its overhead.
  
  Now we use an autoreleased CFMutableData that is sized to the UTF8 length of the NSString in question and is used to hold the UTF8
  conversion of said string.
@@ -2306,8 +2306,8 @@ static id _JKParseUTF8String(JKParseState *parseState, BOOL mutableCollections, 
  Once parsed, the CFMutableData has its length set to 0.  This should, hopefully, allow the CFMutableData to realloc and/or free
  the buffer.
  
- Another change made was a slight modification to JSONDecoder so that most of the cleanup work that was done in -dealloc was moved
- to a private, internal function.  These convenience routines keep the pointer to the autoreleased JSONDecoder and calls
+ Another change made was a slight modification to JKJSONDecoder so that most of the cleanup work that was done in -dealloc was moved
+ to a private, internal function.  These convenience routines keep the pointer to the autoreleased JKJSONDecoder and calls
  _JSONDecoderCleanup() to early release the decoders resources since we already know that particular decoder is not going to be used
  again.  
  
@@ -2325,7 +2325,7 @@ static id _JKParseUTF8String(JKParseState *parseState, BOOL mutableCollections, 
 static id _NSStringObjectFromJSONString(NSString *jsonString, JKParseOptionFlags parseOptionFlags, NSError **error, BOOL mutableCollection) {
   id                returnObject = NULL;
   CFMutableDataRef  mutableData  = NULL;
-  JSONDecoder      *decoder      = NULL;
+  JKJSONDecoder      *decoder      = NULL;
   
   CFIndex    stringLength     = CFStringGetLength((CFStringRef)jsonString);
   NSUInteger stringUTF8Length = [jsonString lengthOfBytesUsingEncoding:NSUTF8StringEncoding];
@@ -2337,8 +2337,8 @@ static id _NSStringObjectFromJSONString(NSString *jsonString, JKParseOptionFlags
     convertedCount = CFStringGetBytes((CFStringRef)jsonString, CFRangeMake(0L, stringLength), kCFStringEncodingUTF8, '?', NO, utf8String, (NSUInteger)stringUTF8Length, &usedBytes);
     if(JK_EXPECT_F(convertedCount != stringLength) || JK_EXPECT_F(usedBytes < 0L)) { if(error != NULL) { *error = [NSError errorWithDomain:@"JKErrorDomain" code:-1L userInfo:[NSDictionary dictionaryWithObject:@"An error occurred converting the contents of a NSString to UTF8." forKey:NSLocalizedDescriptionKey]]; } goto exitNow; }
     
-    if(mutableCollection == NO) { returnObject = [(decoder = [JSONDecoder decoderWithParseOptions:parseOptionFlags])        objectWithUTF8String:(const unsigned char *)utf8String length:(size_t)usedBytes error:error]; }
-    else                        { returnObject = [(decoder = [JSONDecoder decoderWithParseOptions:parseOptionFlags]) mutableObjectWithUTF8String:(const unsigned char *)utf8String length:(size_t)usedBytes error:error]; }
+    if(mutableCollection == NO) { returnObject = [(decoder = [JKJSONDecoder decoderWithParseOptions:parseOptionFlags])        objectWithUTF8String:(const unsigned char *)utf8String length:(size_t)usedBytes error:error]; }
+    else                        { returnObject = [(decoder = [JKJSONDecoder decoderWithParseOptions:parseOptionFlags]) mutableObjectWithUTF8String:(const unsigned char *)utf8String length:(size_t)usedBytes error:error]; }
   }
   
 exitNow:
@@ -2394,8 +2394,8 @@ exitNow:
 
 - (id)objectFromJSONDataWithParseOptions:(JKParseOptionFlags)parseOptionFlags error:(NSError **)error
 {
-  JSONDecoder *decoder = NULL;
-  id returnObject = [(decoder = [JSONDecoder decoderWithParseOptions:parseOptionFlags]) objectWithData:self error:error];
+  JKJSONDecoder *decoder = NULL;
+  id returnObject = [(decoder = [JKJSONDecoder decoderWithParseOptions:parseOptionFlags]) objectWithData:self error:error];
   if(decoder != NULL) { _JSONDecoderCleanup(decoder); }
   return(returnObject);
 }
@@ -2412,8 +2412,8 @@ exitNow:
 
 - (id)mutableObjectFromJSONDataWithParseOptions:(JKParseOptionFlags)parseOptionFlags error:(NSError **)error
 {
-  JSONDecoder *decoder = NULL;
-  id returnObject = [(decoder = [JSONDecoder decoderWithParseOptions:parseOptionFlags]) mutableObjectWithData:self error:error];
+  JKJSONDecoder *decoder = NULL;
+  id returnObject = [(decoder = [JKJSONDecoder decoderWithParseOptions:parseOptionFlags]) mutableObjectWithData:self error:error];
   if(decoder != NULL) { _JSONDecoderCleanup(decoder); }
   return(returnObject);
 }

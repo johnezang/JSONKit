@@ -1,3 +1,5 @@
+Fork of JSONKit to reslove potential namespace conflicts with the ```JSONDecoder``` Object.  Renamed to ```JKJSONDecoder```
+
 # JSONKit
 
 JSONKit is dual licensed under either the terms of the BSD License, or alternatively under the terms of the Apache License, Version 2.0.<br />
