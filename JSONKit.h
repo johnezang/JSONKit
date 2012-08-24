@@ -140,7 +140,7 @@ typedef struct JKParseState JKParseState; // Opaque internal, private type.
 
 // As a general rule of thumb, if you use a method that doesn't accept a JKParseOptionFlags argument, it defaults to JKParseOptionStrict
 
-@interface JSONDecoder : NSObject {
+@interface JKJSONDecoder : NSObject {
   JKParseState *parseState;
 }
 + (id)decoder;
