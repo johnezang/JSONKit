@@ -241,6 +241,51 @@ typedef struct JKParseState JKParseState; // Opaque internal, private type.
   
 #endif
 
+///////////////////////////////////////////////////////////////////////////////////////////////
+
+@interface NSDictionary (JSONKitShorthandSyntax)
+
+//! @brief                 Requests a field by parsing a JavaScript-like expression containing
+//!                        the field's compound identifier.
+//! @param [in] expression The expression that identifies a field to request.
+//! @return                The field identified by the expression, or nil if at least one
+//!                        idendifier refers to a nonexistent entity.
+//! @remarks               This method, along with objectWithExpression:withNamedParams:
+//!                        enables referring to a field by a compound identifier, such as:
+//! @code
+//! NSObject * a = [SomeParsedJson objectWithExpression:@"field1.list2[3].field4[5].field6"];
+//! @endcode
+- (id)objectWithExpression:(NSString *)expression;
+
+
+//! @brief                 Requests a field by parsing a JavaScript-like expression containing
+//!                        the field's compound identifier.
+//! @param [in] expression The expression that identifies a field to request.
+//! @param [in] params     A dictionary of NSString-based keys serving as parameter names
+//!                        and either NSString or NSNumber representing parameter values.
+//! @return                The field identified by the expression, or nil if at least one
+//!                        idendifier refers to a nonexistent entity.
+//! @remarks               This method enables referring to a field by a compound identifier.
+//!                        For arrays, a symbolic name can be specified in the expression,
+//!                        that will be used to substitute index, such as:
+//! @code
+//! NSMutableDictionary * p = [NSMutableDictionary:dictionaryWithObjectsAndKeys:[NSNumber numberWithInt:0], @"i", nil];
+//! NSString * exp = @"field1.list2[i].field4[5].field6";
+//! NSObject * a = [SomeParsedJson objectWithExpression:exp withNamedParams:p];
+//! 
+//! [p setObject:[NSNumber numberWithInt:1] forKey:@"i"];
+//! a = [SomeParsedJson objectWithExpression:exp withNamedParams:p];
+//! @endcode
+- (id)objectWithExpression:(NSString *)expression  withNamedParams:(NSDictionary *)params;
+@end
+
+
+@interface NSArray (JSONKitShorthandSyntax)
+- (id)objectWithExpression:(NSString *)expression;
+- (id)objectWithExpression:(NSString *)expression  withNamedParams:(NSDictionary *)params;
+@end
+
+///////////////////////////////////////////////////////////////////////////////////////////////
 
 #endif // __OBJC__
 

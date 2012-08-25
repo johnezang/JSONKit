@@ -3063,3 +3063,177 @@ errorExit:
 
 #endif // __BLOCKS__
 
+
+///////////////////////////////////////////////////////////////////////////////////////////////
+///////////////////////////////////////////////////////////////////////////////////////////////
+///////////////////////////////////////////////////////////////////////////////////////////////
+
+//! @brief   Transforms a JavaScript-like expression into an NSArray of tokens.
+//! @param [in] theExpression   The JavaScript-like expression to be transformed.
+//! @return                     An autoreleased NSArray of NSString and NSNumber objects.
+static NSArray * Tokenize(NSString * theExpression)
+{
+	NSMutableArray * aRetVal = [[[NSMutableArray alloc] init] autorelease];
+	int aCurPos = 0;
+	int aLen = [theExpression length];
+	
+	NSNumberFormatter * f = [[NSNumberFormatter alloc] init];
+	[f setNumberStyle:NSNumberFormatterDecimalStyle];
+
+	
+	for (int i = 0; i < aLen; ++i)
+	{
+		unichar a = [theExpression characterAtIndex:i];
+		
+		if (a == '.' || a == '[')
+		{
+			// push token
+			if (i > aCurPos)
+			{
+				NSString * aToken = [theExpression substringWithRange:NSMakeRange(aCurPos, i-aCurPos)];
+				[aRetVal addObject:aToken];
+			}
+			
+			aCurPos = i+1;
+		}
+		else if (a == ']')
+		{
+			id aObj = [f numberFromString: [theExpression substringWithRange:NSMakeRange(aCurPos, i-aCurPos)] ];
+			if (aObj == nil)
+				aObj = [theExpression substringWithRange:NSMakeRange(aCurPos, i-aCurPos)];
+
+			[aRetVal addObject:aObj];
+			
+			aCurPos = i+1;
+		}
+	}
+	
+	if (aCurPos < aLen)
+	{
+		// push token
+		NSString * aToken = [theExpression substringFromIndex:aCurPos];
+		[aRetVal addObject:aToken];
+	}
+
+	[f release];
+	return aRetVal;
+}
+
+///////////////////////////////////////////////////////////////////////////////////////////////
+
+//! @brief   Queries a field from a specified object by a given name or index.
+//! @param [in] theCurObject   The object whose field is being queried.
+//! @param [in] theToken       An NSString object to extract a named field from an NSDictionary;
+//!                            otherwise, an NSNumber object to extract a field by index from an NSArray.
+//! @return                    The field extracted or nil if the field has not been found.
+static id ProcessToken(id theCurObject, id theToken)
+{
+	if ( [theToken isKindOfClass:[NSNumber class]] )
+	{
+		NSArray  * aCur = theCurObject;
+		NSNumber * aInd = theToken;
+		return [aCur objectAtIndex:[aInd intValue] ];
+	}
+	else	// NSString
+	{
+		NSDictionary * aCur = theCurObject;
+		NSString     * aKey = theToken;
+		return [aCur objectForKey:aKey];
+	}
+}
+
+///////////////////////////////////////////////////////////////////////////////////////////////
+
+//! @brief                      Queries a field from a given object by parsing a given expression.
+//! @param [in] theSelf         The root object whose fields should be queried.
+//! @param [in] theExpression   The JavaScript-like expression to be parsed.
+//! @return                     A field queried as a result of sequential traversal.
+static id ParseAndTraverseExpression(id theSelf, NSString * theExpression)
+{
+	NSArray * aTokens = Tokenize(theExpression);
+	
+	if (aTokens == nil)
+		return nil;
+	
+	id aCurObject = theSelf;
+
+	for (int i = 0; i < aTokens.count; ++i)
+	{
+		id aToken = [aTokens objectAtIndex:i];
+		
+		aCurObject = ProcessToken(aCurObject, aToken);
+		
+		if (aCurObject == nil)
+			break;
+	}
+	
+	return aCurObject;
+}
+
+///////////////////////////////////////////////////////////////////////////////////////////////
+
+//! @brief                      Queries a field from a given object by parsing a given expression
+//!                             and subsituting named parameters from a given dictionary.
+//! @param [in] theSelf         The root object whose fields should be queried.
+//! @param [in] theExpression   The JavaScript-like expression to be parsed.
+//! @param [in] theParams       A collection of named parameters with keys being NSString objects
+//!                             and values being either NSString or NSNumber objects.
+//! @return                     A field queried as a result of sequential traversal.
+id ParseAndTraverseExpressionWithParams(id theSelf, NSString * theExpression, NSDictionary * theParams)
+{
+	NSArray * aTokens = Tokenize(theExpression);
+	
+	if (aTokens == nil)
+		return nil;
+	
+	id aCurObject = theSelf;
+
+	for (int i = 0; i < aTokens.count; ++i)
+	{
+		id aToken = [aTokens objectAtIndex:i];
+		id aTokenSubst = [theParams objectForKey:aToken];
+		
+		if (aTokenSubst != nil)
+			aToken = aTokenSubst;
+		
+		aCurObject = ProcessToken(aCurObject, aToken);
+
+		if (aCurObject == nil)
+			break;
+	}
+	
+	return aCurObject;
+}
+
+///////////////////////////////////////////////////////////////////////////////////////////////
+///////////////////////////////////////////////////////////////////////////////////////////////
+///////////////////////////////////////////////////////////////////////////////////////////////
+
+@implementation NSArray(JSONKitShorthandSyntax)
+
+- (id)objectWithExpression:(NSString *)theExpression
+	{ return ParseAndTraverseExpression(self, theExpression); }
+
+///////////////////////////////////////////////////////////////////////////////////////////////
+
+- (id)objectWithExpression:(NSString *)theExpression  withNamedParams:(NSDictionary *)params
+	{ return ParseAndTraverseExpressionWithParams(self, theExpression, params); }
+
+@end
+
+///////////////////////////////////////////////////////////////////////////////////////////////
+///////////////////////////////////////////////////////////////////////////////////////////////
+///////////////////////////////////////////////////////////////////////////////////////////////
+
+@implementation NSDictionary(JSONKitShorthandSyntax)
+
+- (id)objectWithExpression:(NSString *)theExpression
+	{ return ParseAndTraverseExpression(self, theExpression); }
+
+///////////////////////////////////////////////////////////////////////////////////////////////
+
+- (id)objectWithExpression:(NSString *)theExpression  withNamedParams:(NSDictionary *)params
+	{ return ParseAndTraverseExpressionWithParams(self, theExpression, params); }
+
+@end
+
