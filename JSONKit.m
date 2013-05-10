@@ -2145,11 +2145,11 @@ static void _JSONDecoderCleanup(JSONDecoder *decoder) {
     if(JK_EXPECT_T(parseState->cache.items != NULL)) {
       size_t idx = 0UL;
       for(idx = 0UL; idx < parseState->cache.count; idx++) {
-        if(JK_EXPECT_T(parseState->cache.items[idx].object != NULL)) { CFRelease(parseState->cache.items[idx].object); parseState->cache.items[idx].object = NULL; }
-        if(JK_EXPECT_T(parseState->cache.items[idx].bytes  != NULL)) { free(parseState->cache.items[idx].bytes);       parseState->cache.items[idx].bytes  = NULL; }
-        memset(&parseState->cache.items[idx], 0, sizeof(JKTokenCacheItem));
+        if(JK_EXPECT_T(parseState->cache.items[idx].object != NULL)) { CFRelease(parseState->cache.items[idx].object); }
+        if(JK_EXPECT_T(parseState->cache.items[idx].bytes  != NULL)) { free(parseState->cache.items[idx].bytes); }
         parseState->cache.age[idx] = 0U;
       }
+      memset(parseState->cache.items, 0, parseState->cache.count * sizeof(JKTokenCacheItem));
     }
   }
 }
