@@ -1643,8 +1643,8 @@ static int jk_parse_number(JKParseState *parseState) {
     
     switch(numberState) {
       case JSONNumberStateWholeNumberStart: if   (currentChar == '-')                                                                              { numberState = JSONNumberStateWholeNumberMinus;      isNegative      = 1; break; }
-      case JSONNumberStateWholeNumberMinus: if   (currentChar == '0')                                                                              { numberState = JSONNumberStateWholeNumberZero;                            break; }
-                                       else if(  (currentChar >= '1') && (currentChar <= '9'))                                                     { numberState = JSONNumberStateWholeNumber;                                break; }
+      case JSONNumberStateWholeNumberMinus: if   (currentChar == '0' && !(parseState->parseOptionFlags & JKParseOptionPermitLeadingZero))                                                                              { numberState = JSONNumberStateWholeNumberZero;                            break; }
+                                       else if(  (currentChar >= '0') && (currentChar <= '9'))                                                     { numberState = JSONNumberStateWholeNumber;                                break; }
                                        else                                                     { /* XXX Add error message */                        numberState = JSONNumberStateError;                                      break; }
       case JSONNumberStateExponentStart:    if(  (currentChar == '+') || (currentChar == '-'))                                                     { numberState = JSONNumberStateExponentPlusMinus;                          break; }
       case JSONNumberStateFractionalNumberStart:

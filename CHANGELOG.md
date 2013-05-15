@@ -6,6 +6,8 @@
 
 ### New Features
 
+*    Version 1.5 introduces new option, `JKParseOptionPermitLeadingZero` which permits leading zeros when parsing numeric objects.
+
 *    When `JKSerializeOptionPretty` is enabled, JSONKit now sorts the keys.
 
 *    Normally, JSONKit can only serialize NSNull, NSNumber, NSString, NSArray, and NSDictioonary like objects.  It is now possible to serialize an object of any class via either a delegate or a `^` block.

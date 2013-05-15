@@ -102,7 +102,7 @@ typedef unsigned int   NSUInteger;
 #endif
   
 #define JSONKIT_VERSION_MAJOR 1
-#define JSONKIT_VERSION_MINOR 4
+#define JSONKIT_VERSION_MINOR 5
 
 typedef NSUInteger JKFlags;
 
@@ -121,7 +121,8 @@ enum {
   JKParseOptionUnicodeNewlines          = (1 << 1),
   JKParseOptionLooseUnicode             = (1 << 2),
   JKParseOptionPermitTextAfterValidJSON = (1 << 3),
-  JKParseOptionValidFlags               = (JKParseOptionComments | JKParseOptionUnicodeNewlines | JKParseOptionLooseUnicode | JKParseOptionPermitTextAfterValidJSON),
+  JKParseOptionPermitLeadingZero        = (1 << 4),
+  JKParseOptionValidFlags               = (JKParseOptionComments | JKParseOptionUnicodeNewlines | JKParseOptionLooseUnicode | JKParseOptionPermitTextAfterValidJSON | JKParseOptionPermitLeadingZero),
 };
 typedef JKFlags JKParseOptionFlags;
 
