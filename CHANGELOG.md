@@ -24,8 +24,8 @@
     **IMPORTANT:** The `^` block MUST return an object with a class that can be serialized by JSONKit, otherwise the serialization will fail.
     
     <pre>
-    &#x200b;- (NSData \*)JSONDataWithOptions:(JKSerializeOptionFlags)serializeOptions serializeUnsupportedClassesUsingDelegate:(id)delegate selector:(SEL)selector error:(NSError \*\*)error;
-    &#x200b;- (NSString \*)JSONStringWithOptions:(JKSerializeOptionFlags)serializeOptions serializeUnsupportedClassesUsingDelegate:(id)delegate selector:(SEL)selector error:(NSError \*\*)error;
+    &#x200b;- (NSData *)JSONDataWithOptions:(JKSerializeOptionFlags)serializeOptions serializeUnsupportedClassesUsingDelegate:(id)delegate selector:(SEL)selector error:(NSError **)error;
+    &#x200b;- (NSString *)JSONStringWithOptions:(JKSerializeOptionFlags)serializeOptions serializeUnsupportedClassesUsingDelegate:(id)delegate selector:(SEL)selector error:(NSError **)error;
     </pre>
     
     To serialize NSArray or NSDictionary objects using a `^` block&ndash;
@@ -34,15 +34,15 @@
     **IMPORTANT:** The `^` block MUST return an object with a class that can be serialized by JSONKit, otherwise the serialization will fail.
     
     <pre>
-    &#x200b;- (NSData \*)JSONDataWithOptions:(JKSerializeOptionFlags)serializeOptions serializeUnsupportedClassesUsingBlock:(id(&#x005E;)(id object))block error:(NSError \*\*)error;
-    &#x200b;- (NSString \*)JSONStringWithOptions:(JKSerializeOptionFlags)serializeOptions serializeUnsupportedClassesUsingBlock:(id(&#x005E;)(id object))block error:(NSError \*\*)error;
+    &#x200b;- (NSData *)JSONDataWithOptions:(JKSerializeOptionFlags)serializeOptions serializeUnsupportedClassesUsingBlock:(id(&#x005E;)(id object))block error:(NSError **)error;
+    &#x200b;- (NSString *)JSONStringWithOptions:(JKSerializeOptionFlags)serializeOptions serializeUnsupportedClassesUsingBlock:(id(&#x005E;)(id object))block error:(NSError **)error;
     </pre>
     
     Example using the delegate way:
     
     <pre>
     @interface MYFormatter : NSObject {
-      NSDateFormatter \*outputFormatter;
+      NSDateFormatter *outputFormatter;
     }
     @end
     &#x200b;
@@ -69,10 +69,10 @@
     @end
     &#x200b;
     {
-      MYFormatter \*myFormatter = [[[MYFormatter alloc] init] autorelease];
-      NSArray \*array = [NSArray arrayWithObject:[NSDate dateWithTimeIntervalSinceNow:0.0]];
+      MYFormatter *myFormatter = [[[MYFormatter alloc] init] autorelease];
+      NSArray *array = [NSArray arrayWithObject:[NSDate dateWithTimeIntervalSinceNow:0.0]];
 
-      NSString \*jsonString = NULL;
+      NSString *jsonString = NULL;
       jsonString = [array                    JSONStringWithOptions:JKSerializeOptionNone
       &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;serializeUnsupportedClassesUsingDelegate:myFormatter
       &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;selector:@selector(formatObject:)
@@ -86,7 +86,7 @@
     
     <pre>
     {
-      NSDateFormatter \*outputFormatter = [[[NSDateFormatter alloc] init] autorelease];
+      NSDateFormatter *outputFormatter = [[[NSDateFormatter alloc] init] autorelease];
       [outputFormatter setDateFormat:@"yyyy-MM-dd'T'HH:mm:ss.SSSZZZ"];
       &#x200b;
       jsonString = [array                 JSONStringWithOptions:encodeOptions
@@ -121,10 +121,10 @@
 *   The following `JSONDecoder` methods are deprecated beginning with JSONKit v1.4 and will be removed in a later release&ndash;
     
     <pre>
-    &#x200b;- (id)parseUTF8String:(const unsigned char \*)string length:(size_t)length;
-    &#x200b;- (id)parseUTF8String:(const unsigned char \*)string length:(size_t)length error:(NSError \*\*)error;
-    &#x200b;- (id)parseJSONData:(NSData \*)jsonData;
-    &#x200b;- (id)parseJSONData:(NSData \*)jsonData error:(NSError \*\*)error;
+    &#x200b;- (id)parseUTF8String:(const unsigned char *)string length:(size_t)length;
+    &#x200b;- (id)parseUTF8String:(const unsigned char *)string length:(size_t)length error:(NSError **)error;
+    &#x200b;- (id)parseJSONData:(NSData *)jsonData;
+    &#x200b;- (id)parseJSONData:(NSData *)jsonData error:(NSError **)error;
     </pre>
     
     The JSONKit v1.4 <code>objectWith&hellip;</code> methods should be used instead.
@@ -136,19 +136,19 @@
     These methods replace their deprecated <code>parse&hellip;</code> counterparts and return immutable collection objects.
     
     <pre>
-    &#x200b;- (id)objectWithUTF8String:(const unsigned char \*)string length:(NSUInteger)length;
-    &#x200b;- (id)objectWithUTF8String:(const unsigned char \*)string length:(NSUInteger)length error:(NSError \*\*)error;
-    &#x200b;- (id)objectWithData:(NSData \*)jsonData;
-    &#x200b;- (id)objectWithData:(NSData \*)jsonData error:(NSError \*\*)error;
+    &#x200b;- (id)objectWithUTF8String:(const unsigned char *)string length:(NSUInteger)length;
+    &#x200b;- (id)objectWithUTF8String:(const unsigned char *)string length:(NSUInteger)length error:(NSError **)error;
+    &#x200b;- (id)objectWithData:(NSData *)jsonData;
+    &#x200b;- (id)objectWithData:(NSData *)jsonData error:(NSError **)error;
     </pre>
     
     These methods are the same as their <code>objectWith&hellip;</code> counterparts except they return mutable collection objects.
     
     <pre>
-    &#x200b;- (id)mutableObjectWithUTF8String:(const unsigned char \*)string length:(NSUInteger)length;
-    &#x200b;- (id)mutableObjectWithUTF8String:(const unsigned char \*)string length:(NSUInteger)length error:(NSError \*\*)error;
-    &#x200b;- (id)mutableObjectWithData:(NSData \*)jsonData;
-    &#x200b;- (id)mutableObjectWithData:(NSData \*)jsonData error:(NSError \*\*)error;
+    &#x200b;- (id)mutableObjectWithUTF8String:(const unsigned char *)string length:(NSUInteger)length;
+    &#x200b;- (id)mutableObjectWithUTF8String:(const unsigned char *)string length:(NSUInteger)length error:(NSError **)error;
+    &#x200b;- (id)mutableObjectWithData:(NSData *)jsonData;
+    &#x200b;- (id)mutableObjectWithData:(NSData *)jsonData error:(NSError **)error;
     </pre>
 
 *   The following methods were added to `NSString (JSONKitDeserializing)`&ndash;
@@ -158,7 +158,7 @@
     <pre>
     &#x200b;- (id)mutableObjectFromJSONString;
     &#x200b;- (id)mutableObjectFromJSONStringWithParseOptions:(JKParseOptionFlags)parseOptionFlags;
-    &#x200b;- (id)mutableObjectFromJSONStringWithParseOptions:(JKParseOptionFlags)parseOptionFlags error:(NSError \*\*)error;
+    &#x200b;- (id)mutableObjectFromJSONStringWithParseOptions:(JKParseOptionFlags)parseOptionFlags error:(NSError **)error;
     </pre>
 
 *   The following methods were added to `NSData (JSONKitDeserializing)`&ndash;
@@ -168,7 +168,7 @@
     <pre>
     &#x200b;- (id)mutableObjectFromJSONData;
     &#x200b;- (id)mutableObjectFromJSONDataWithParseOptions:(JKParseOptionFlags)parseOptionFlags;
-    &#x200b;- (id)mutableObjectFromJSONDataWithParseOptions:(JKParseOptionFlags)parseOptionFlags error:(NSError \*\*)error;
+    &#x200b;- (id)mutableObjectFromJSONDataWithParseOptions:(JKParseOptionFlags)parseOptionFlags error:(NSError **)error;
     </pre>
 
 *   The following methods were added to `NSString (JSONKitSerializing)`&ndash;
@@ -176,10 +176,10 @@
     These methods are for those uses that need to serialize a single [`NSString`][NSString]&ndash;
     
     <pre>
-    &#x200b;- (NSData \*)JSONData;
-    &#x200b;- (NSData \*)JSONDataWithOptions:(JKSerializeOptionFlags)serializeOptions includeQuotes:(BOOL)includeQuotes error:(NSError \*\*)error;
-    &#x200b;- (NSString \*)JSONString;
-    &#x200b;- (NSString \*)JSONStringWithOptions:(JKSerializeOptionFlags)serializeOptions includeQuotes:(BOOL)includeQuotes error:(NSError \*\*)error;
+    &#x200b;- (NSData *)JSONData;
+    &#x200b;- (NSData *)JSONDataWithOptions:(JKSerializeOptionFlags)serializeOptions includeQuotes:(BOOL)includeQuotes error:(NSError **)error;
+    &#x200b;- (NSString *)JSONString;
+    &#x200b;- (NSString *)JSONStringWithOptions:(JKSerializeOptionFlags)serializeOptions includeQuotes:(BOOL)includeQuotes error:(NSError **)error;
     </pre>
     
 ### Bug Fixes
