@@ -682,10 +682,12 @@ static JKArray *_JKArrayCreate(id *objects, NSUInteger count, BOOL mutableCollec
 #pragma clang diagnostic ignored "-Wdeprecated-objc-isa-usage"
       array->isa      = _JKArrayClass;
 #pragma clang diagnostic pop
+#ifndef __clang_analyzer__
     if((array = [array init]) == NULL) { return(NULL); }
     array->capacity = count;
     array->count    = count;
     if(JK_EXPECT_F((array->objects = (id *)malloc(sizeof(id) * array->capacity)) == NULL)) { [array autorelease]; return(NULL); }
+#endif
     memcpy(array->objects, objects, array->capacity * sizeof(id));
     array->mutations = (mutableCollection == NO) ? 0UL : 1UL;
   }
@@ -937,11 +939,13 @@ static JKDictionary *_JKDictionaryCreate(id *keys, NSUInteger *keyHashes, id *ob
 #pragma clang diagnostic ignored "-Wdeprecated-objc-isa-usage"
     dictionary->isa      = _JKDictionaryClass;
 #pragma clang diagnostic pop
+#ifndef __clang_analyzer__
     if((dictionary = [dictionary init]) == NULL) { return(NULL); }
     dictionary->capacity = _JKDictionaryCapacityForCount(count);
     dictionary->count    = 0UL;
     
     if(JK_EXPECT_F((dictionary->entry = (JKHashTableEntry *)calloc(1UL, sizeof(JKHashTableEntry) * dictionary->capacity)) == NULL)) { [dictionary autorelease]; return(NULL); }
+#endif
 
     NSUInteger idx = 0UL;
     for(idx = 0UL; idx < count; idx++) { _JKDictionaryAddObject(dictionary, keyHashes[idx], keys[idx], objects[idx]); }
