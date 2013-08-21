@@ -1699,13 +1699,13 @@ static int jk_parse_number(JKParseState *parseState) {
     }
 
     if(JK_EXPECT_F(errno != 0)) {
-      numberState = JSONNumberStateError;
       if(errno == ERANGE) {
         switch(parseState->token.value.type) {
-          case JKValueTypeDouble:           jk_error(parseState, @"The value '%s' could not be represented as a 'double' due to %s.",           numberTempBuf, (parseState->token.value.number.doubleValue == 0.0) ? "underflow" : "overflow"); break; // see above for == 0.0.
-          case JKValueTypeLongLong:         jk_error(parseState, @"The value '%s' exceeded the minimum value that could be represented: %lld.", numberTempBuf, parseState->token.value.number.longLongValue);                                   break;
-          case JKValueTypeUnsignedLongLong: jk_error(parseState, @"The value '%s' exceeded the maximum value that could be represented: %llu.", numberTempBuf, parseState->token.value.number.unsignedLongLongValue);                           break;
-          default:                          jk_error(parseState, @"Internal error: Unknown token value type. %@ line #%ld",                     [NSString stringWithUTF8String:__FILE__], (long)__LINE__);                                      break;
+          case JKValueTypeDouble: if(!(parseState->parseOptionFlags & JKParseOptionTruncateNumbers)) { numberState = JSONNumberStateError; jk_error(parseState, @"The value '%s' could not be represented as a 'double' due to %s.",           numberTempBuf, (parseState->token.value.number.doubleValue == 0.0) ? "underflow" : "overflow"); } break; // see above for == 0.0.
+          case JKValueTypeLongLong: if(!(parseState->parseOptionFlags & JKParseOptionTruncateNumbers)) { numberState = JSONNumberStateError; jk_error(parseState, @"The value '%s' exceeded the minimum value that could be represented: %lld.", numberTempBuf, parseState->token.value.number.longLongValue); } break;
+          case JKValueTypeUnsignedLongLong: if(!(parseState->parseOptionFlags & JKParseOptionTruncateNumbers)) { numberState = JSONNumberStateError; jk_error(parseState, @"The value '%s' exceeded the maximum value that could be represented: %llu.", numberTempBuf, parseState->token.value.number.unsignedLongLongValue); } break;
+          default:
+              numberState = JSONNumberStateError; jk_error(parseState, @"Internal error: Unknown token value type. %@ line #%ld", [NSString stringWithUTF8String:__FILE__], (long)__LINE__); break;
         }
       }
     }
