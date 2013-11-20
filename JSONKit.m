@@ -677,11 +677,13 @@ static JKArray *_JKArrayCreate(id *objects, NSUInteger count, BOOL mutableCollec
   NSCParameterAssert((objects != NULL) && (_JKArrayClass != NULL) && (_JKArrayInstanceSize > 0UL));
   JKArray *array = NULL;
   if(JK_EXPECT_T((array = (JKArray *)calloc(1UL, _JKArrayInstanceSize)) != NULL)) { // Directly allocate the JKArray instance via calloc.
-    array->isa      = _JKArrayClass;
+  object_setClass(array, _JKArrayClass);
+#ifndef __clang_analyzer__
     if((array = [array init]) == NULL) { return(NULL); }
     array->capacity = count;
     array->count    = count;
     if(JK_EXPECT_F((array->objects = (id *)malloc(sizeof(id) * array->capacity)) == NULL)) { [array autorelease]; return(NULL); }
+#endif
     memcpy(array->objects, objects, array->capacity * sizeof(id));
     array->mutations = (mutableCollection == NO) ? 0UL : 1UL;
   }
@@ -928,12 +930,14 @@ static JKDictionary *_JKDictionaryCreate(id *keys, NSUInteger *keyHashes, id *ob
   NSCParameterAssert((keys != NULL) && (keyHashes != NULL) && (objects != NULL) && (_JKDictionaryClass != NULL) && (_JKDictionaryInstanceSize > 0UL));
   JKDictionary *dictionary = NULL;
   if(JK_EXPECT_T((dictionary = (JKDictionary *)calloc(1UL, _JKDictionaryInstanceSize)) != NULL)) { // Directly allocate the JKDictionary instance via calloc.
-    dictionary->isa      = _JKDictionaryClass;
+  object_setClass(dictionary, _JKDictionaryClass);
+#ifndef __clang_analyzer__
     if((dictionary = [dictionary init]) == NULL) { return(NULL); }
     dictionary->capacity = _JKDictionaryCapacityForCount(count);
     dictionary->count    = 0UL;
     
     if(JK_EXPECT_F((dictionary->entry = (JKHashTableEntry *)calloc(1UL, sizeof(JKHashTableEntry) * dictionary->capacity)) == NULL)) { [dictionary autorelease]; return(NULL); }
+#endif
 
     NSUInteger idx = 0UL;
     for(idx = 0UL; idx < count; idx++) { _JKDictionaryAddObject(dictionary, keyHashes[idx], keys[idx], objects[idx]); }
@@ -2594,8 +2598,10 @@ static int jk_encode_add_atom_to_buffer(JKEncodeState *encodeState, void *object
   //     
   // XXX XXX XXX XXX
 
-
+  #pragma clang diagnostic push
+  #pragma clang diagnostic ignored "-Wdeprecated-objc-pointer-introspection"
   BOOL   workAroundMacOSXABIBreakingBug = (JK_EXPECT_F(((NSUInteger)object) & 0x1))     ? YES  : NO;
+  #pragma clang diagnostic pop
   void  *objectISA                      = (JK_EXPECT_F(workAroundMacOSXABIBreakingBug)) ? NULL : *((void **)objectPtr);
   if(JK_EXPECT_F(workAroundMacOSXABIBreakingBug)) { goto slowClassLookup; }
 
