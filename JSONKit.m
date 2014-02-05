@@ -2067,7 +2067,7 @@ static void *jk_object_for_token(JKParseState *parseState) {
     case JKTokenTypeArrayBegin:  parsedAtom = jk_parse_array(parseState);      break;
     case JKTokenTypeTrue:        parsedAtom = (void *)kCFBooleanTrue;          break;
     case JKTokenTypeFalse:       parsedAtom = (void *)kCFBooleanFalse;         break;
-    case JKTokenTypeNull:        parsedAtom = (void *)kCFNull;                 break;
+	case JKTokenTypeNull:        parsedAtom = ((parseState->parseOptionFlags & JKParseOptionNormalizeOnNull) ? (void *)CFSTR("") : (void *)kCFNull);                 break;
     default: jk_error(parseState, @"Internal error: Unknown token type. %@ line #%ld", [NSString stringWithUTF8String:__FILE__], (long)__LINE__); break;
   }
   

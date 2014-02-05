@@ -48,6 +48,8 @@ String             | [`NSString`][NSString]
 Array              | [`NSArray`][NSArray]
 Object             | [`NSDictionary`][NSDictionary]
 
+**Warning:** `null` will be an empty string if `JKParseOptionNormalizeOnNull` is used.
+
 JSONKit uses Core Foundation internally, and it is assumed that Core Foundation &equiv; Foundation for every equivalent base type, i.e. [`CFString`][CFString] &equiv; [`NSString`][NSString].
 
 The key words "MUST", "MUST NOT", "REQUIRED", "SHALL", "SHALL NOT", "SHOULD", "SHOULD NOT", "RECOMMENDED",  "MAY", and "OPTIONAL" in this document are to be interpreted as described in [RFC 2119][].
@@ -221,6 +223,7 @@ The <code>objectWith&hellip;</code> methods return immutable collection objects 
   <tr><td valign="top"><code>JKParseOptionUnicodeNewlines</code></td><td>Allow Unicode recommended <code>(?:\r\n|[\n\v\f\r\x85\p{Zl}\p{Zp}])</code> newlines in JSON.  The <a href="http://tools.ietf.org/html/rfc4627">JSON specification</a> only allows the newline characters <code>\r</code> and <code>\n</code>, but this option allows JSON that contains the <a href="http://en.wikipedia.org/wiki/Newline#Unicode">Unicode recommended newline characters</a> to be parsed.  JSON that contains these additional newline characters is not strictly conforming JSON.</td></tr>
   <tr><td valign="top"><code>JKParseOptionLooseUnicode</code></td><td>Normally the decoder will stop with an error at any malformed Unicode. This option allows JSON with malformed Unicode to be parsed without reporting an error. Any malformed Unicode is replaced with <code>\uFFFD</code>, or <code>REPLACEMENT CHARACTER</code>, as specified in <a href="http://www.unicode.org/versions/Unicode6.0.0/ch03.pdf">The Unicode 6.0 standard, Chapter 3</a>, section 3.9 <em>Unicode Encoding Forms</em>.</td></tr>
   <tr><td valign="top"><code>JKParseOptionPermitTextAfterValidJSON</code></td><td>Normally, <code>non-white-space</code> that follows the JSON is interpreted as a parsing failure. This option allows for any trailing <code>non-white-space</code> to be ignored and not cause a parsing error.</td></tr>
+  <tr><td valign="top"><code>JKParseOptionNormalizeOnNull</code></td><td>Use an empty string instead of NSNull class on `null` value.</td></tr>
 </table>
 
 ### Serializing Interface
