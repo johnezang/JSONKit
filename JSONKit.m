@@ -1461,7 +1461,12 @@ static int jk_parse_string(JKParseState *parseState) {
         goto slowMatch;
       }
 
-      if(JK_EXPECT_F(currentChar < 0x20UL)) { jk_error(parseState, @"Invalid character < 0x20 found in string: 0x%2.2x.", currentChar); stringState = JSONStringStateError; goto finishedParsing; }
+      if(JK_EXPECT_F(currentChar < 0x20UL) && (parseState->parseOptionFlags & JKParseOptionLooseUnicode) == 0) {
+          jk_error(parseState, @"Invalid character < 0x20 found in string: 0x%2.2x.", currentChar); stringState = JSONStringStateError; goto finishedParsing;
+      }
+      else {
+          currentChar = 0xFFFDUL;
+      }
 
       stringHash = jk_calculateHash(stringHash, currentChar);
     }
@@ -1477,6 +1482,9 @@ static int jk_parse_string(JKParseState *parseState) {
     unsigned long currentChar = (*atStringCharacter), escapedChar;
 
     if(JK_EXPECT_T(stringState == JSONStringStateParsing)) {
+      if(JK_EXPECT_F(currentChar < 0x20UL) && (parseState->parseOptionFlags & JKParseOptionLooseUnicode)) {
+        currentChar = 0xFFFDUL;
+      }
       if(JK_EXPECT_T(currentChar >= 0x20UL)) {
         if(JK_EXPECT_T(currentChar < (unsigned long)0x80)) { // Not a UTF8 sequence
           if(JK_EXPECT_F(currentChar == (unsigned long)'"'))  { stringState = JSONStringStateFinished; atStringCharacter++; goto finishedParsing; }
@@ -1501,7 +1509,7 @@ static int jk_parse_string(JKParseState *parseState) {
             continue;
           }
         }
-      } else { // currentChar < 0x20
+      } else { // currentChar < 0x20 and JKParseOptionLooseUnicode is not specified
         jk_error(parseState, @"Invalid character < 0x20 found in string: 0x%2.2x.", currentChar); stringState = JSONStringStateError; goto finishedParsing;
       }
 
