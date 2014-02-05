@@ -1635,12 +1635,11 @@ static int jk_parse_number(JKParseState *parseState) {
   const unsigned char *numberStart       = JK_AT_STRING_PTR(parseState);
   const unsigned char *endOfBuffer       = JK_END_STRING_PTR(parseState);
   const unsigned char *atNumberCharacter = NULL;
-  int                  numberState       = JSONNumberStateWholeNumberStart, isFloatingPoint = 0, isNegative = 0, backup = 0;
+  int                  numberState       = JSONNumberStateWholeNumberStart, isFloatingPoint = 0, isNegative = 0, backup = 0, isHex = 0, isOctal = 0;
   size_t               startingIndex     = parseState->atIndex;
   
   for(atNumberCharacter = numberStart; (JK_EXPECT_T(atNumberCharacter < endOfBuffer)) && (JK_EXPECT_T(!(JK_EXPECT_F(numberState == JSONNumberStateFinished) || JK_EXPECT_F(numberState == JSONNumberStateError)))); atNumberCharacter++) {
     unsigned long currentChar = (unsigned long)(*atNumberCharacter), lowerCaseCC = currentChar | 0x20UL;
-    
     switch(numberState) {
       case JSONNumberStateWholeNumberStart: if   (currentChar == '-')                                                                              { numberState = JSONNumberStateWholeNumberMinus;      isNegative      = 1; break; }
       case JSONNumberStateWholeNumberMinus: if   (currentChar == '0')                                                                              { numberState = JSONNumberStateWholeNumberZero;                            break; }
@@ -1651,10 +1650,16 @@ static int jk_parse_number(JKParseState *parseState) {
       case JSONNumberStateExponentPlusMinus:if(!((currentChar >= '0') && (currentChar <= '9'))) { /* XXX Add error message */                        numberState = JSONNumberStateError;                                      break; }
                                        else {                                              if(numberState == JSONNumberStateFractionalNumberStart) { numberState = JSONNumberStateFractionalNumber; }
                                                                                            else                                                    { numberState = JSONNumberStateExponent;         }                         break; }
-      case JSONNumberStateWholeNumberZero:
+      case JSONNumberStateWholeNumberZero:  if   ((currentChar >= '0') && (currentChar <= '7'))                                                    { numberState = JSONNumberStateWholeNumber;           isOctal = 1;                }
+                                       else if   (lowerCaseCC == 'x')                                                                              { numberState = JSONNumberStateWholeNumber;             isHex = 1;         break; }
+
       case JSONNumberStateWholeNumber:      if   (currentChar == '.')                                                                              { numberState = JSONNumberStateFractionalNumberStart; isFloatingPoint = 1; break; }
       case JSONNumberStateFractionalNumber: if   (lowerCaseCC == 'e')                                                                              { numberState = JSONNumberStateExponentStart;         isFloatingPoint = 1; break; }
-      case JSONNumberStateExponent:         if(!((currentChar >= '0') && (currentChar <= '9')) || (numberState == JSONNumberStateWholeNumberZero)) { numberState = JSONNumberStateFinished;              backup          = 1; break; }
+      case JSONNumberStateExponent:         if(
+                                                !(
+                                                    ((currentChar >= '0') && (currentChar <= '9') && !(isOctal && (currentChar >= '8'))) || (isHex && (lowerCaseCC >= 'a' && lowerCaseCC <='f'))
+                                                 ) || (numberState == JSONNumberStateWholeNumberZero)
+                                              )                                                                                                    { numberState = JSONNumberStateFinished;              backup          = 1; break; }
         break;
       default:                                                                                    /* XXX Add error message */                        numberState = JSONNumberStateError;                                      break;
     }
@@ -1690,7 +1695,7 @@ static int jk_parse_number(JKParseState *parseState) {
         parseState->token.value.ptrRange.length      = sizeof(long long);
         parseState->token.value.hash                 = (JK_HASH_INIT + parseState->token.value.type) + (JKHash)parseState->token.value.number.longLongValue;
       } else {
-        parseState->token.value.number.unsignedLongLongValue = strtoull((const char *)numberTempBuf, (char **)&endOfNumber, 10);
+        parseState->token.value.number.unsignedLongLongValue = strtoull((const char *)numberTempBuf, (char **)&endOfNumber, 0);
         parseState->token.value.type                         = JKValueTypeUnsignedLongLong;
         parseState->token.value.ptrRange.ptr                 = (const unsigned char *)&parseState->token.value.number.unsignedLongLongValue;
         parseState->token.value.ptrRange.length              = sizeof(unsigned long long);
