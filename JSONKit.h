@@ -121,7 +121,8 @@ enum {
   JKParseOptionUnicodeNewlines          = (1 << 1),
   JKParseOptionLooseUnicode             = (1 << 2),
   JKParseOptionPermitTextAfterValidJSON = (1 << 3),
-  JKParseOptionValidFlags               = (JKParseOptionComments | JKParseOptionUnicodeNewlines | JKParseOptionLooseUnicode | JKParseOptionPermitTextAfterValidJSON),
+  JKParseOptionExcludedPartsAsRaw       = (1 << 4),
+  JKParseOptionValidFlags               = (JKParseOptionComments | JKParseOptionUnicodeNewlines | JKParseOptionLooseUnicode | JKParseOptionPermitTextAfterValidJSON | JKParseOptionExcludedPartsAsRaw),
 };
 typedef JKFlags JKParseOptionFlags;
 
@@ -146,6 +147,13 @@ typedef struct JKParseState JKParseState; // Opaque internal, private type.
 + (id)decoder;
 + (id)decoderWithParseOptions:(JKParseOptionFlags)parseOptionFlags;
 - (id)initWithParseOptions:(JKParseOptionFlags)parseOptionFlags;
+- (id)initWithParseOptions:(JKParseOptionFlags)parseOptionFlags andParserDepth:(size_t)depth;
+#ifdef __BLOCKS__
++ (id)decoderWithFormaterBlock:(id(^)(id inputObject)) block;
++ (id)decoderWithParseOptions:(JKParseOptionFlags)parseOptionFlags withFormaterBlock:(id(^)(id inputObject)) block;
++ (id)decoderWithParseOptions:(JKParseOptionFlags)parseOptionFlags withFormaterBlock:(id(^)(id inputObject)) block andParserDepth:(size_t)depth;
+- (id)initWithParseOptions:(JKParseOptionFlags)parseOptionFlags withFormaterBlock:(id(^)(id inputObject)) block andParserDepth:(size_t)depth;
+#endif
 - (void)clearCache;
 
 // The parse... methods were deprecated in v1.4 in favor of the v1.4 objectWith... methods.
@@ -179,9 +187,19 @@ typedef struct JKParseState JKParseState; // Opaque internal, private type.
 - (id)objectFromJSONString;
 - (id)objectFromJSONStringWithParseOptions:(JKParseOptionFlags)parseOptionFlags;
 - (id)objectFromJSONStringWithParseOptions:(JKParseOptionFlags)parseOptionFlags error:(NSError **)error;
+- (id)objectFromJSONStringWithParseOptions:(JKParseOptionFlags)parseOptionFlags error:(NSError **)error andParserDepth:(size_t)depth;
 - (id)mutableObjectFromJSONString;
 - (id)mutableObjectFromJSONStringWithParseOptions:(JKParseOptionFlags)parseOptionFlags;
 - (id)mutableObjectFromJSONStringWithParseOptions:(JKParseOptionFlags)parseOptionFlags error:(NSError **)error;
+- (id)mutableObjectFromJSONStringWithParseOptions:(JKParseOptionFlags)parseOptionFlags error:(NSError **)error andParserDepth:(size_t)depth;
+
+#ifdef __BLOCKS__
+- (id)mutableObjectFromJSONStringWithParseOptions:(JKParseOptionFlags)parseOptionFlags error:(NSError **)error block:(id(^)(id inputObject)) block;
+- (id)objectFromJSONStringWithParseOptions:(JKParseOptionFlags)parseOptionFlags error:(NSError **)error block:(id(^)(id inputObject))block;
+- (id)mutableObjectFromJSONStringWithParseOptions:(JKParseOptionFlags)parseOptionFlags error:(NSError **)error block:(id(^)(id inputObject)) block andParserDepth:(size_t)depth;
+- (id)objectFromJSONStringWithParseOptions:(JKParseOptionFlags)parseOptionFlags error:(NSError **)error block:(id(^)(id inputObject))block andParserDepth:(size_t)depth;
+#endif
+
 @end
 
 @interface NSData (JSONKitDeserializing)
@@ -189,9 +207,18 @@ typedef struct JKParseState JKParseState; // Opaque internal, private type.
 - (id)objectFromJSONData;
 - (id)objectFromJSONDataWithParseOptions:(JKParseOptionFlags)parseOptionFlags;
 - (id)objectFromJSONDataWithParseOptions:(JKParseOptionFlags)parseOptionFlags error:(NSError **)error;
+- (id)objectFromJSONDataWithParseOptions:(JKParseOptionFlags)parseOptionFlags error:(NSError **)error andParserDepth:(size_t)depth;
 - (id)mutableObjectFromJSONData;
 - (id)mutableObjectFromJSONDataWithParseOptions:(JKParseOptionFlags)parseOptionFlags;
 - (id)mutableObjectFromJSONDataWithParseOptions:(JKParseOptionFlags)parseOptionFlags error:(NSError **)error;
+- (id)mutableObjectFromJSONDataWithParseOptions:(JKParseOptionFlags)parseOptionFlags error:(NSError **)error andParserDepth:(size_t)depth;
+
+#ifdef __BLOCKS__
+- (id)mutableObjectFromJSONDataWithParseOptions:(JKParseOptionFlags)parseOptionFlags error:(NSError **)error block:(id(^)(id inputObject)) block;
+- (id)objectFromJSONDataWithParseOptions:(JKParseOptionFlags)parseOptionFlags error:(NSError **)error block:(id(^)(id inputObject)) block;
+- (id)mutableObjectFromJSONDataWithParseOptions:(JKParseOptionFlags)parseOptionFlags error:(NSError **)error block:(id(^)(id inputObject)) block andParserDepth:(size_t)depth;
+- (id)objectFromJSONDataWithParseOptions:(JKParseOptionFlags)parseOptionFlags error:(NSError **)error block:(id(^)(id inputObject)) block andParserDepth:(size_t)depth;
+#endif
 @end
 
 ////////////
@@ -238,9 +265,25 @@ typedef struct JKParseState JKParseState; // Opaque internal, private type.
 - (NSData *)JSONDataWithOptions:(JKSerializeOptionFlags)serializeOptions serializeUnsupportedClassesUsingBlock:(id(^)(id object))block error:(NSError **)error;
 - (NSString *)JSONStringWithOptions:(JKSerializeOptionFlags)serializeOptions serializeUnsupportedClassesUsingBlock:(id(^)(id object))block error:(NSError **)error;
 @end
+    
+@interface NSObject (JSONKitSerializingBlockAdditions)
+- (NSData *)JSONDataWithOptions:(JKSerializeOptionFlags)serializeOptions serializeUnsupportedClassesUsingBlock:(id(^)(id object))block error:(NSError **)error;
+- (NSString *)JSONStringWithOptions:(JKSerializeOptionFlags)serializeOptions serializeUnsupportedClassesUsingBlock:(id(^)(id object))block error:(NSError **)error;
+@end
   
 #endif
 
+#pragma mark -
+@interface JKRawData : NSObject
+{
+    
+}
+
+@property (nonatomic, strong) NSString *data;
+
+- (id)initWithString:(NSString *)aString;
+
+@end
 
 #endif // __OBJC__
 
