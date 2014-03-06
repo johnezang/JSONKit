@@ -274,6 +274,7 @@ enum {
   JKClassArray      = 3,
   JKClassDictionary = 4,
   JKClassNull       = 5,
+  JKClassRaw        = 6
 };
 
 enum {
@@ -358,6 +359,7 @@ typedef id (*NSNumberInitWithUnsignedLongLongImp)(id receiver, SEL selector, uns
 typedef id (*JKClassFormatterIMP)(id receiver, SEL selector, id object);
 #ifdef __BLOCKS__
 typedef id (^JKClassFormatterBlock)(id formatObject);
+typedef id (^JKInputFormatterBlock)(id inputObject);
 #endif
 
 
@@ -439,9 +441,13 @@ struct JKObjCImpCache {
 
 struct JKParseState {
   JKParseOptionFlags  parseOptionFlags;
+  BOOL                raw;
+  JKConstBuffer       rawBuffer;
   JKConstBuffer       stringBuffer;
   size_t              atIndex, lineNumber, lineStartIndex;
   size_t              prev_atIndex, prev_lineNumber, prev_lineStartIndex;
+  size_t              depth;
+  size_t              maxDepth;
   JKParseToken        token;
   JKObjectStack       objectStack;
   JKTokenCache        cache;
@@ -449,6 +455,9 @@ struct JKParseState {
   NSError            *error;
   int                 errorIsPrev;
   BOOL                mutableCollections;
+#ifdef __BLOCKS__
+  JKInputFormatterBlock   inputFormatterBlock;
+#endif
 };
 
 struct JKFastClassLookup {
@@ -457,6 +466,7 @@ struct JKFastClassLookup {
   void *arrayClass;
   void *dictionaryClass;
   void *nullClass;
+  void *rawClass;
 };
 
 struct JKEncodeCache {
@@ -490,8 +500,10 @@ struct JKEncodeState {
 
 #ifdef __BLOCKS__
 #define JKSERIALIZER_BLOCKS_PROTO id(^)(id object)
+#define JKDECODER_BLOCKS_PROTO id(^)(id inputObject)
 #else
 #define JKSERIALIZER_BLOCKS_PROTO id
+#define JKDECODER_BLOCKS_PROTO id
 #endif
 
 + (id)serializeObject:(id)object options:(JKSerializeOptionFlags)optionFlags encodeOption:(JKEncodeOptionType)encodeOption block:(JKSERIALIZER_BLOCKS_PROTO)block delegate:(id)delegate selector:(SEL)selector error:(NSError **)error;
@@ -566,7 +578,7 @@ static JKHashTableEntry *_JKDictionaryHashTableEntryForKey(JKDictionary *diction
 
 static void _JSONDecoderCleanup(JSONDecoder *decoder);
 
-static id _NSStringObjectFromJSONString(NSString *jsonString, JKParseOptionFlags parseOptionFlags, NSError **error, BOOL mutableCollection);
+//static id __NSStringObjectFromJSONString(NSString *jsonString, JKParseOptionFlags parseOptionFlags, NSError **error, BOOL mutableCollection);
 
 
 static void jk_managedBuffer_release(JKManagedBuffer *managedBuffer);
@@ -677,7 +689,7 @@ static JKArray *_JKArrayCreate(id *objects, NSUInteger count, BOOL mutableCollec
   NSCParameterAssert((objects != NULL) && (_JKArrayClass != NULL) && (_JKArrayInstanceSize > 0UL));
   JKArray *array = NULL;
   if(JK_EXPECT_T((array = (JKArray *)calloc(1UL, _JKArrayInstanceSize)) != NULL)) { // Directly allocate the JKArray instance via calloc.
-    array->isa      = _JKArrayClass;
+    object_setClass(array, _JKArrayClass);
     if((array = [array init]) == NULL) { return(NULL); }
     array->capacity = count;
     array->count    = count;
@@ -873,6 +885,24 @@ static void _JKArrayRemoveObjectAtIndex(JKArray *array, NSUInteger objectIndex) 
 @end
 
 #pragma mark -
+@implementation JKRawData {
+    
+}
+
+@synthesize data;
+
+- (id)initWithString:(NSString *)aString {
+    self = [super init];
+	if (self != nil)
+	{
+        self.data = aString;
+    }
+    return self;
+}
+
+@end
+
+#pragma mark -
 @interface JKDictionary : NSMutableDictionary <NSCopying, NSMutableCopying, NSFastEnumeration> {
   NSUInteger count, capacity, mutations;
   JKHashTableEntry *entry;
@@ -928,7 +958,7 @@ static JKDictionary *_JKDictionaryCreate(id *keys, NSUInteger *keyHashes, id *ob
   NSCParameterAssert((keys != NULL) && (keyHashes != NULL) && (objects != NULL) && (_JKDictionaryClass != NULL) && (_JKDictionaryInstanceSize > 0UL));
   JKDictionary *dictionary = NULL;
   if(JK_EXPECT_T((dictionary = (JKDictionary *)calloc(1UL, _JKDictionaryInstanceSize)) != NULL)) { // Directly allocate the JKDictionary instance via calloc.
-    dictionary->isa      = _JKDictionaryClass;
+    object_setClass(dictionary, _JKDictionaryClass);
     if((dictionary = [dictionary init]) == NULL) { return(NULL); }
     dictionary->capacity = _JKDictionaryCapacityForCount(count);
     dictionary->count    = 0UL;
@@ -1827,6 +1857,69 @@ static void jk_error_parse_accept_or3(JKParseState *parseState, int state, NSStr
   else if(acceptIdx == 3) { jk_error(parseState, @"Expected %@, %@, or %@, not '%*.*s", acceptStrings[0], acceptStrings[1], acceptStrings[2], (int)parseState->token.tokenPtrRange.length, (int)parseState->token.tokenPtrRange.length, parseState->token.tokenPtrRange.ptr); }
 }
 
+static void jk_parse_raw(JKParseState *parseState) {
+
+    if (JK_EXPECT_F(!parseState->raw)) {
+        parseState->rawBuffer.bytes.ptr = parseState->token.tokenPtrRange.ptr;
+        parseState->rawBuffer.bytes.length = 1;
+        
+        parseState->raw = YES;
+    }
+    
+    int rawState = JKParseAcceptValueOrEnd, stopParsing = 0;
+    
+    while(JK_EXPECT_T((JK_EXPECT_T(stopParsing == 0)) && (JK_EXPECT_T(parseState->atIndex < parseState->stringBuffer.bytes.length)))) {
+
+        
+        if(JK_EXPECT_T((stopParsing = jk_parse_next_token(parseState)) == 0)) {
+            
+            switch(parseState->token.type) {
+                case JKTokenTypeNumber:
+                case JKTokenTypeString:
+                case JKTokenTypeTrue:
+                case JKTokenTypeFalse:
+                case JKTokenTypeNull:
+                case JKTokenTypeArrayBegin:
+                case JKTokenTypeObjectBegin:
+                    
+                    if(JK_EXPECT_F((rawState & JKParseAcceptValue) == 0))    {
+                        parseState->errorIsPrev = 1; jk_error(parseState, @"Unexpected value.");
+                        stopParsing = 1; break;
+                    }
+                    
+                    parseState->rawBuffer.bytes.length += parseState->token.tokenPtrRange.length;
+                    
+                    if(JK_EXPECT_T(parseState->token.type == JKTokenTypeArrayBegin || parseState->token.type == JKTokenTypeObjectBegin))
+                        jk_parse_raw(parseState);
+                    
+                    
+                    rawState = JKParseAcceptCommaOrEnd;
+                    break;
+                case JKTokenTypeArrayEnd:
+                case JKTokenTypeObjectEnd:
+                    if(JK_EXPECT_T(rawState & JKParseAcceptEnd)) {
+                        parseState->rawBuffer.bytes.length += parseState->token.tokenPtrRange.length;
+                    } else {
+                        parseState->errorIsPrev = 1; jk_error(parseState, @"Unexpected ']'.");
+                    }
+                    stopParsing = 1;
+                    break;
+                case JKTokenTypeSeparator:
+                case JKTokenTypeComma:
+                    if(JK_EXPECT_T(rawState & JKParseAcceptComma)) {
+                        rawState = JKParseAcceptValue;
+                        parseState->rawBuffer.bytes.length += parseState->token.tokenPtrRange.length;
+                    } else {
+                        parseState->errorIsPrev = 1; jk_error(parseState, @"Unexpected ',' or ':'.");
+                        stopParsing = 1;
+                    }
+                    break;
+                default: parseState->errorIsPrev = 1; jk_error_parse_accept_or3(parseState, rawState, @"a value", @"a comma", @"a ']' or '}'"); stopParsing = 1; break;
+            }
+        }
+    }
+}
+
 static void *jk_parse_array(JKParseState *parseState) {
   size_t  startingObjectIndex = parseState->objectStack.index;
   int     arrayState          = JKParseAcceptValueOrEnd, stopParsing = 0;
@@ -1849,10 +1942,32 @@ static void *jk_parse_array(JKParseState *parseState) {
         case JKTokenTypeNull:
         case JKTokenTypeArrayBegin:
         case JKTokenTypeObjectBegin:
+           
+          if (parseState->token.type == JKTokenTypeArrayBegin || parseState->token.type == JKTokenTypeObjectBegin)
+              parseState->depth++;
+              
           if(JK_EXPECT_F((arrayState & JKParseAcceptValue)          == 0))    { parseState->errorIsPrev = 1; jk_error(parseState, @"Unexpected value.");              stopParsing = 1; break; }
-          if(JK_EXPECT_F((object = jk_object_for_token(parseState)) == NULL)) {                              jk_error(parseState, @"Internal error: Object == NULL"); stopParsing = 1; break; } else { parseState->objectStack.objects[parseState->objectStack.index++] = object; arrayState = JKParseAcceptCommaOrEnd; }
+          if(JK_EXPECT_F((object = jk_object_for_token(parseState)) == NULL)) {                              jk_error(parseState, @"Internal error: Object == NULL"); stopParsing = 1; break;
+          } else {
+#ifdef __BLOCKS__
+              void *formattedObject = NULL;
+              if(JK_EXPECT_T((parseState->inputFormatterBlock) && (formattedObject = parseState->inputFormatterBlock(object)) != NULL))
+                  object = formattedObject;
+#endif
+              parseState->objectStack.objects[parseState->objectStack.index++] = object; arrayState = JKParseAcceptCommaOrEnd;
+          }
           break;
-        case JKTokenTypeArrayEnd: if(JK_EXPECT_T(arrayState & JKParseAcceptEnd)) { NSCParameterAssert(parseState->objectStack.index >= startingObjectIndex); parsedArray = (void *)_JKArrayCreate((id *)&parseState->objectStack.objects[startingObjectIndex], (parseState->objectStack.index - startingObjectIndex), parseState->mutableCollections); } else { parseState->errorIsPrev = 1; jk_error(parseState, @"Unexpected ']'."); } stopParsing = 1; break;
+        case JKTokenTypeArrayEnd:
+              if(JK_EXPECT_T(arrayState & JKParseAcceptEnd)) {
+                  NSCParameterAssert(parseState->objectStack.index >= startingObjectIndex); parsedArray = (void *)_JKArrayCreate((id *)&parseState->objectStack.objects[startingObjectIndex], (parseState->objectStack.index - startingObjectIndex), parseState->mutableCollections);
+                  
+                  if (parseState->token.type == JKTokenTypeArrayEnd)
+                      parseState->depth--;
+              } else {
+                  parseState->errorIsPrev = 1; jk_error(parseState, @"Unexpected ']'.");
+              }
+              stopParsing = 1;
+              break;
         case JKTokenTypeComma:    if(JK_EXPECT_T(arrayState & JKParseAcceptComma)) { arrayState = JKParseAcceptValue; } else { parseState->errorIsPrev = 1; jk_error(parseState, @"Unexpected ','."); stopParsing = 1; } break;
         default: parseState->errorIsPrev = 1; jk_error_parse_accept_or3(parseState, arrayState, @"a value", @"a comma", @"a ']'"); stopParsing = 1; break;
       }
@@ -1903,7 +2018,11 @@ static void *jk_parse_dictionary(JKParseState *parseState) {
           }
           break;
 
-        case JKTokenTypeObjectEnd: if((JK_EXPECT_T(dictState & JKParseAcceptEnd)))   { NSCParameterAssert(parseState->objectStack.index >= startingObjectIndex); parsedDictionary = jk_create_dictionary(parseState, startingObjectIndex); } else { parseState->errorIsPrev = 1; jk_error(parseState, @"Unexpected '}'."); } stopParsing = 1; break;
+        case JKTokenTypeObjectEnd:
+              if (parseState->token.type == JKTokenTypeObjectEnd)
+                  parseState->depth--;
+              
+              if((JK_EXPECT_T(dictState & JKParseAcceptEnd)))   { NSCParameterAssert(parseState->objectStack.index >= startingObjectIndex); parsedDictionary = jk_create_dictionary(parseState, startingObjectIndex); } else { parseState->errorIsPrev = 1; jk_error(parseState, @"Unexpected '}'."); } stopParsing = 1; break;
         case JKTokenTypeComma:     if((JK_EXPECT_T(dictState & JKParseAcceptComma))) { dictState = JKParseAcceptValue; parseState->objectStack.index--; continue; } else { parseState->errorIsPrev = 1; jk_error(parseState, @"Unexpected ','."); stopParsing = 1; } break;
 
         default: parseState->errorIsPrev = 1; jk_error_parse_accept_or3(parseState, dictState, @"a \"STRING\"", @"a comma", @"a '}'"); stopParsing = 1; break;
@@ -1923,8 +2042,19 @@ static void *jk_parse_dictionary(JKParseState *parseState) {
         case JKTokenTypeNull:
         case JKTokenTypeArrayBegin:
         case JKTokenTypeObjectBegin:
+          if (parseState->token.type == JKTokenTypeArrayBegin || parseState->token.type == JKTokenTypeObjectBegin)
+              parseState->depth++;
+              
           if(JK_EXPECT_F((dictState & JKParseAcceptValue)           == 0))    { parseState->errorIsPrev = 1; jk_error(parseState, @"Unexpected value.");               stopParsing = 1; break; }
-          if(JK_EXPECT_F((object = jk_object_for_token(parseState)) == NULL)) {                              jk_error(parseState, @"Internal error: Object == NULL."); stopParsing = 1; break; } else { parseState->objectStack.objects[objectStackIndex] = object; dictState = JKParseAcceptCommaOrEnd; }
+          if(JK_EXPECT_F((object = jk_object_for_token(parseState)) == NULL)) {                              jk_error(parseState, @"Internal error: Object == NULL."); stopParsing = 1; break; } else {
+              
+#ifdef __BLOCKS__
+              void *formattedObject = NULL;
+              if(JK_EXPECT_T((parseState->inputFormatterBlock) && (formattedObject = parseState->inputFormatterBlock(object)) != NULL))
+                  object = formattedObject;
+#endif
+              parseState->objectStack.objects[objectStackIndex] = object; dictState = JKParseAcceptCommaOrEnd;
+          }
           break;
         default: parseState->errorIsPrev = 1; jk_error_parse_accept_or3(parseState, dictState, @"a value", @"a comma", @"a '}'"); stopParsing = 1; break;
       }
@@ -1948,7 +2078,15 @@ static id json_parse_it(JKParseState *parseState) {
     if((JK_EXPECT_T(stopParsing == 0)) && (JK_EXPECT_T((stopParsing = jk_parse_next_token(parseState)) == 0))) {
       switch(parseState->token.type) {
         case JKTokenTypeArrayBegin:
-        case JKTokenTypeObjectBegin: parsedObject = [(id)jk_object_for_token(parseState) autorelease]; stopParsing = 1; break;
+        case JKTokenTypeObjectBegin:
+              parsedObject = [(id)jk_object_for_token(parseState) autorelease];
+              stopParsing = 1;
+#ifdef __BLOCKS__
+              void *formattedObject = NULL;
+              if(JK_EXPECT_T((parseState->inputFormatterBlock) && (formattedObject = parseState->inputFormatterBlock(parsedObject)) != NULL))
+                  parsedObject = formattedObject;
+#endif
+              break;
         default:                     jk_error(parseState, @"Expected either '[' or '{'.");             stopParsing = 1; break;
       }
     }
@@ -2060,16 +2198,33 @@ static void *jk_object_for_token(JKParseState *parseState) {
   void *parsedAtom = NULL;
   
   parseState->token.value.cacheItem = NULL;
-  switch(parseState->token.type) {
-    case JKTokenTypeString:      parsedAtom = jk_cachedObjects(parseState);    break;
-    case JKTokenTypeNumber:      parsedAtom = jk_cachedObjects(parseState);    break;
-    case JKTokenTypeObjectBegin: parsedAtom = jk_parse_dictionary(parseState); break;
-    case JKTokenTypeArrayBegin:  parsedAtom = jk_parse_array(parseState);      break;
-    case JKTokenTypeTrue:        parsedAtom = (void *)kCFBooleanTrue;          break;
-    case JKTokenTypeFalse:       parsedAtom = (void *)kCFBooleanFalse;         break;
-    case JKTokenTypeNull:        parsedAtom = (void *)kCFNull;                 break;
-    default: jk_error(parseState, @"Internal error: Unknown token type. %@ line #%ld", [NSString stringWithUTF8String:__FILE__], (long)__LINE__); break;
-  }
+    
+    if (JK_EXPECT_T(parseState->maxDepth > 0 && !parseState->raw && parseState->depth >= parseState->maxDepth)) {
+        parsedAtom = (void *)kCFNull;
+        jk_parse_raw(parseState);
+        
+        if(JK_EXPECT_T(parseState->parseOptionFlags & JKParseOptionExcludedPartsAsRaw)) {
+            if (JK_EXPECT_T(parseState->rawBuffer.bytes.ptr != 0x0 && parseState->rawBuffer.bytes.length > 0)) {
+                parsedAtom = [[JKRawData alloc] initWithString:(void *)CFStringCreateWithBytes(NULL, parseState->rawBuffer.bytes.ptr, parseState->rawBuffer.bytes.length, kCFStringEncodingUTF8, 0)];
+            }
+        }
+        
+        parseState->depth --;
+        parseState->raw = NO;
+    } else {
+        
+        switch(parseState->token.type) {
+            case JKTokenTypeString:      parsedAtom = jk_cachedObjects(parseState);    break;
+            case JKTokenTypeNumber:      parsedAtom = jk_cachedObjects(parseState);    break;
+            case JKTokenTypeObjectBegin: parsedAtom = jk_parse_dictionary(parseState); break;
+            case JKTokenTypeArrayBegin:  parsedAtom = jk_parse_array(parseState);      break;
+            case JKTokenTypeTrue:        parsedAtom = (void *)kCFBooleanTrue;          break;
+            case JKTokenTypeFalse:       parsedAtom = (void *)kCFBooleanFalse;         break;
+            case JKTokenTypeNull:        parsedAtom = (void *)kCFNull;                 break;
+            default: jk_error(parseState, @"Internal error: Unknown token type. %@ line #%ld", [NSString stringWithUTF8String:__FILE__], (long)__LINE__); break;
+        }
+        
+    }
   
   return(parsedAtom);
 }
@@ -2082,9 +2237,23 @@ static void *jk_object_for_token(JKParseState *parseState) {
   return([self decoderWithParseOptions:JKParseOptionStrict]);
 }
 
++ (id)decoderWithFormaterBlock:(JKDECODER_BLOCKS_PROTO) block
+{
+    return([self decoderWithParseOptions:JKParseOptionStrict withFormaterBlock:block]);
+}
+
 + (id)decoderWithParseOptions:(JKParseOptionFlags)parseOptionFlags
 {
-  return([[[self alloc] initWithParseOptions:parseOptionFlags] autorelease]);
+    return([[[self alloc] initWithParseOptions:parseOptionFlags] autorelease]);
+}
+
++ (id)decoderWithParseOptions:(JKParseOptionFlags)parseOptionFlags withFormaterBlock:(JKDECODER_BLOCKS_PROTO) block
+{
+    return([[[self alloc] initWithParseOptions:parseOptionFlags withFormaterBlock:block andParserDepth:-1] autorelease]);
+}
+
++ (id)decoderWithParseOptions:(JKParseOptionFlags)parseOptionFlags withFormaterBlock:(JKDECODER_BLOCKS_PROTO) block andParserDepth:(size_t)depth{
+    return([[[self alloc] initWithParseOptions:parseOptionFlags withFormaterBlock:block andParserDepth:depth] autorelease]);
 }
 
 - (id)init
@@ -2094,12 +2263,30 @@ static void *jk_object_for_token(JKParseState *parseState) {
 
 - (id)initWithParseOptions:(JKParseOptionFlags)parseOptionFlags
 {
+    return [self initWithParseOptions:parseOptionFlags withFormaterBlock:nil andParserDepth:-1];
+}
+
+
+- (id)initWithParseOptions:(JKParseOptionFlags)parseOptionFlags andParserDepth:(size_t)depth
+{
+    return [self initWithParseOptions:parseOptionFlags withFormaterBlock:nil andParserDepth:depth];
+}
+
+- (id)initWithParseOptions:(JKParseOptionFlags)parseOptionFlags withFormaterBlock:(JKDECODER_BLOCKS_PROTO) block andParserDepth:(size_t)depth
+{
+    
   if((self = [super init]) == NULL) { return(NULL); }
 
   if(parseOptionFlags & ~JKParseOptionValidFlags) { [self autorelease]; [NSException raise:NSInvalidArgumentException format:@"Invalid parse options."]; }
 
   if((parseState = (JKParseState *)calloc(1UL, sizeof(JKParseState))) == NULL) { goto errorExit; }
 
+#ifdef __BLOCKS__
+  parseState->inputFormatterBlock = block;
+#endif
+    
+  parseState->depth = 0;
+  parseState->maxDepth = depth;
   parseState->parseOptionFlags = parseOptionFlags;
   
   parseState->token.tokenBuffer.roundSizeUpToMultipleOf = 4096UL;
@@ -2322,29 +2509,30 @@ static id _JKParseUTF8String(JKParseState *parseState, BOOL mutableCollections, 
 
 @implementation NSString (JSONKitDeserializing)
 
-static id _NSStringObjectFromJSONString(NSString *jsonString, JKParseOptionFlags parseOptionFlags, NSError **error, BOOL mutableCollection) {
-  id                returnObject = NULL;
-  CFMutableDataRef  mutableData  = NULL;
-  JSONDecoder      *decoder      = NULL;
-  
-  CFIndex    stringLength     = CFStringGetLength((CFStringRef)jsonString);
-  NSUInteger stringUTF8Length = [jsonString lengthOfBytesUsingEncoding:NSUTF8StringEncoding];
-  
-  if((mutableData = (CFMutableDataRef)[(id)CFDataCreateMutable(NULL, (NSUInteger)stringUTF8Length) autorelease]) != NULL) {
-    UInt8   *utf8String = CFDataGetMutableBytePtr(mutableData);
-    CFIndex  usedBytes  = 0L, convertedCount = 0L;
++ (id) _NSStringObjectFromJSONString:(NSString *)jsonString options:(JKParseOptionFlags)parseOptionFlags error:(NSError **)error mutable:(BOOL) mutableCollection block:(JKDECODER_BLOCKS_PROTO)block andParserDepth:(size_t)depth{
+
+    id                returnObject = NULL;
+    CFMutableDataRef  mutableData  = NULL;
+    JSONDecoder      *decoder      = NULL;
     
-    convertedCount = CFStringGetBytes((CFStringRef)jsonString, CFRangeMake(0L, stringLength), kCFStringEncodingUTF8, '?', NO, utf8String, (NSUInteger)stringUTF8Length, &usedBytes);
-    if(JK_EXPECT_F(convertedCount != stringLength) || JK_EXPECT_F(usedBytes < 0L)) { if(error != NULL) { *error = [NSError errorWithDomain:@"JKErrorDomain" code:-1L userInfo:[NSDictionary dictionaryWithObject:@"An error occurred converting the contents of a NSString to UTF8." forKey:NSLocalizedDescriptionKey]]; } goto exitNow; }
+    CFIndex    stringLength     = CFStringGetLength((CFStringRef)jsonString);
+    NSUInteger stringUTF8Length = [jsonString lengthOfBytesUsingEncoding:NSUTF8StringEncoding];
     
-    if(mutableCollection == NO) { returnObject = [(decoder = [JSONDecoder decoderWithParseOptions:parseOptionFlags])        objectWithUTF8String:(const unsigned char *)utf8String length:(size_t)usedBytes error:error]; }
-    else                        { returnObject = [(decoder = [JSONDecoder decoderWithParseOptions:parseOptionFlags]) mutableObjectWithUTF8String:(const unsigned char *)utf8String length:(size_t)usedBytes error:error]; }
-  }
-  
+    if((mutableData = (CFMutableDataRef)[(id)CFDataCreateMutable(NULL, (NSUInteger)stringUTF8Length) autorelease]) != NULL) {
+        UInt8   *utf8String = CFDataGetMutableBytePtr(mutableData);
+        CFIndex  usedBytes  = 0L, convertedCount = 0L;
+        
+        convertedCount = CFStringGetBytes((CFStringRef)jsonString, CFRangeMake(0L, stringLength), kCFStringEncodingUTF8, '?', NO, utf8String, (NSUInteger)stringUTF8Length, &usedBytes);
+        if(JK_EXPECT_F(convertedCount != stringLength) || JK_EXPECT_F(usedBytes < 0L)) { if(error != NULL) { *error = [NSError errorWithDomain:@"JKErrorDomain" code:-1L userInfo:[NSDictionary dictionaryWithObject:@"An error occurred converting the contents of a NSString to UTF8." forKey:NSLocalizedDescriptionKey]]; } goto exitNow; }
+        
+        if(mutableCollection == NO) { returnObject = [(decoder = [JSONDecoder decoderWithParseOptions:parseOptionFlags withFormaterBlock:block andParserDepth:depth])        objectWithUTF8String:(const unsigned char *)utf8String length:(size_t)usedBytes error:error]; }
+        else                        { returnObject = [(decoder = [JSONDecoder decoderWithParseOptions:parseOptionFlags withFormaterBlock:block andParserDepth:depth]) mutableObjectWithUTF8String:(const unsigned char *)utf8String length:(size_t)usedBytes error:error]; }
+    }
+    
 exitNow:
-  if(mutableData != NULL) { CFDataSetLength(mutableData, 0L); }
-  if(decoder     != NULL) { _JSONDecoderCleanup(decoder);     }
-  return(returnObject);
+    if(mutableData != NULL) { CFDataSetLength(mutableData, 0L); }
+    if(decoder     != NULL) { _JSONDecoderCleanup(decoder);     }
+    return(returnObject);
 }
 
 - (id)objectFromJSONString
@@ -2359,9 +2547,20 @@ exitNow:
 
 - (id)objectFromJSONStringWithParseOptions:(JKParseOptionFlags)parseOptionFlags error:(NSError **)error
 {
-  return(_NSStringObjectFromJSONString(self, parseOptionFlags, error, NO));
+    return ([self objectFromJSONStringWithParseOptions:parseOptionFlags error:error block:NULL]);
 }
 
+- (id)objectFromJSONStringWithParseOptions:(JKParseOptionFlags)parseOptionFlags error:(NSError **)error andParserDepth:(size_t)depth {
+    return ([self objectFromJSONStringWithParseOptions:parseOptionFlags error:error block:NULL andParserDepth:depth]);
+}
+
+- (id)objectFromJSONStringWithParseOptions:(JKParseOptionFlags)parseOptionFlags error:(NSError **)error block:(JKDECODER_BLOCKS_PROTO)block{
+    return ([NSString _NSStringObjectFromJSONString:self options:parseOptionFlags error:error mutable:NO block:block andParserDepth:-1]);
+}
+
+- (id)objectFromJSONStringWithParseOptions:(JKParseOptionFlags)parseOptionFlags error:(NSError **)error block:(JKDECODER_BLOCKS_PROTO)block andParserDepth:(size_t)depth{
+    return ([NSString _NSStringObjectFromJSONString:self options:parseOptionFlags error:error mutable:NO block:block andParserDepth:depth]);
+}
 
 - (id)mutableObjectFromJSONString
 {
@@ -2375,7 +2574,20 @@ exitNow:
 
 - (id)mutableObjectFromJSONStringWithParseOptions:(JKParseOptionFlags)parseOptionFlags error:(NSError **)error
 {
-  return(_NSStringObjectFromJSONString(self, parseOptionFlags, error, YES));
+    return ([self mutableObjectFromJSONStringWithParseOptions:parseOptionFlags error:error block:NULL]);
+}
+
+- (id)mutableObjectFromJSONStringWithParseOptions:(JKParseOptionFlags)parseOptionFlags error:(NSError **)error andParserDepth:(size_t)depth
+{
+    return ([self mutableObjectFromJSONStringWithParseOptions:parseOptionFlags error:error block:NULL andParserDepth:depth]);
+}
+
+- (id)mutableObjectFromJSONStringWithParseOptions:(JKParseOptionFlags)parseOptionFlags error:(NSError **)error block:(JKDECODER_BLOCKS_PROTO) block{
+    return ([NSString _NSStringObjectFromJSONString:self options:parseOptionFlags error:error mutable:YES block:block andParserDepth:-1]);
+}
+
+- (id)mutableObjectFromJSONStringWithParseOptions:(JKParseOptionFlags)parseOptionFlags error:(NSError **)error block:(JKDECODER_BLOCKS_PROTO) block andParserDepth:(size_t)depth {
+    return ([NSString _NSStringObjectFromJSONString:self options:parseOptionFlags error:error mutable:YES block:block andParserDepth:depth]);
 }
 
 @end
@@ -2394,10 +2606,24 @@ exitNow:
 
 - (id)objectFromJSONDataWithParseOptions:(JKParseOptionFlags)parseOptionFlags error:(NSError **)error
 {
-  JSONDecoder *decoder = NULL;
-  id returnObject = [(decoder = [JSONDecoder decoderWithParseOptions:parseOptionFlags]) objectWithData:self error:error];
-  if(decoder != NULL) { _JSONDecoderCleanup(decoder); }
-  return(returnObject);
+    return ([self objectFromJSONDataWithParseOptions:parseOptionFlags error:error block:NULL]);
+}
+
+- (id)objectFromJSONDataWithParseOptions:(JKParseOptionFlags)parseOptionFlags error:(NSError **)error andParserDepth:(size_t)depth
+{
+    return ([self objectFromJSONDataWithParseOptions:parseOptionFlags error:error block:NULL andParserDepth:depth]);
+}
+
+- (id)objectFromJSONDataWithParseOptions:(JKParseOptionFlags)parseOptionFlags error:(NSError **)error block:(JKDECODER_BLOCKS_PROTO)block andParserDepth:(size_t)depth
+{
+    JSONDecoder *decoder = NULL;
+    id returnObject = [(decoder = [JSONDecoder decoderWithParseOptions:parseOptionFlags withFormaterBlock:block andParserDepth:depth]) objectWithData:self error:error];
+    if(decoder != NULL) { _JSONDecoderCleanup(decoder); }
+    return(returnObject);
+}
+
+- (id)objectFromJSONDataWithParseOptions:(JKParseOptionFlags)parseOptionFlags error:(NSError **)error block:(JKDECODER_BLOCKS_PROTO)block {
+    return [self objectFromJSONDataWithParseOptions:parseOptionFlags error:error block:block andParserDepth:-1];
 }
 
 - (id)mutableObjectFromJSONData
@@ -2412,12 +2638,25 @@ exitNow:
 
 - (id)mutableObjectFromJSONDataWithParseOptions:(JKParseOptionFlags)parseOptionFlags error:(NSError **)error
 {
-  JSONDecoder *decoder = NULL;
-  id returnObject = [(decoder = [JSONDecoder decoderWithParseOptions:parseOptionFlags]) mutableObjectWithData:self error:error];
-  if(decoder != NULL) { _JSONDecoderCleanup(decoder); }
-  return(returnObject);
+    return([self mutableObjectFromJSONDataWithParseOptions:parseOptionFlags error:error block:NULL]);
 }
 
+- (id)mutableObjectFromJSONDataWithParseOptions:(JKParseOptionFlags)parseOptionFlags error:(NSError **)error andParserDepth:(size_t)depth
+{
+    return([self mutableObjectFromJSONDataWithParseOptions:parseOptionFlags error:error block:NULL andParserDepth:depth]);
+}
+
+- (id)mutableObjectFromJSONDataWithParseOptions:(JKParseOptionFlags)parseOptionFlags error:(NSError **)error block:(JKDECODER_BLOCKS_PROTO) block {
+    return [self mutableObjectFromJSONDataWithParseOptions:parseOptionFlags error:error block:block andParserDepth:-1];
+}
+
+- (id)mutableObjectFromJSONDataWithParseOptions:(JKParseOptionFlags)parseOptionFlags error:(NSError **)error block:(id(^)(id inputObject)) block andParserDepth:(size_t)depth
+{
+    JSONDecoder *decoder = NULL;
+    id returnObject = [(decoder = [JSONDecoder decoderWithParseOptions:parseOptionFlags withFormaterBlock:block andParserDepth:depth]) mutableObjectWithData:self error:error];
+    if(decoder != NULL) { _JSONDecoderCleanup(decoder); }
+    return(returnObject);
+}
 
 @end
 
@@ -2594,9 +2833,12 @@ static int jk_encode_add_atom_to_buffer(JKEncodeState *encodeState, void *object
   //     
   // XXX XXX XXX XXX
 
-
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wdeprecated-objc-pointer-introspection"
   BOOL   workAroundMacOSXABIBreakingBug = (JK_EXPECT_F(((NSUInteger)object) & 0x1))     ? YES  : NO;
-  void  *objectISA                      = (JK_EXPECT_F(workAroundMacOSXABIBreakingBug)) ? NULL : *((void **)objectPtr);
+  void  *objectISA                      = (JK_EXPECT_F(workAroundMacOSXABIBreakingBug)) ? NULL : *((void **)object);
+#pragma clang diagnostic pop
+    
   if(JK_EXPECT_F(workAroundMacOSXABIBreakingBug)) { goto slowClassLookup; }
 
        if(JK_EXPECT_T(objectISA == encodeState->fastClassLookup.stringClass))     { isClass = JKClassString;     }
@@ -2604,9 +2846,11 @@ static int jk_encode_add_atom_to_buffer(JKEncodeState *encodeState, void *object
   else if(JK_EXPECT_T(objectISA == encodeState->fastClassLookup.dictionaryClass)) { isClass = JKClassDictionary; }
   else if(JK_EXPECT_T(objectISA == encodeState->fastClassLookup.arrayClass))      { isClass = JKClassArray;      }
   else if(JK_EXPECT_T(objectISA == encodeState->fastClassLookup.nullClass))       { isClass = JKClassNull;       }
+  else if(JK_EXPECT_T(objectISA == encodeState->fastClassLookup.rawClass))        { isClass = JKClassRaw;        }
   else {
   slowClassLookup:
-         if(JK_EXPECT_T([object isKindOfClass:[NSString     class]])) { if(workAroundMacOSXABIBreakingBug == NO) { encodeState->fastClassLookup.stringClass     = objectISA; } isClass = JKClassString;     }
+         if(JK_EXPECT_T([object isKindOfClass:[JKRawData    class]])) { if(workAroundMacOSXABIBreakingBug == NO) { encodeState->fastClassLookup.rawClass        = objectISA; } isClass = JKClassRaw;     }
+    else if(JK_EXPECT_T([object isKindOfClass:[NSString     class]])) { if(workAroundMacOSXABIBreakingBug == NO) { encodeState->fastClassLookup.stringClass     = objectISA; } isClass = JKClassString;     }
     else if(JK_EXPECT_T([object isKindOfClass:[NSNumber     class]])) { if(workAroundMacOSXABIBreakingBug == NO) { encodeState->fastClassLookup.numberClass     = objectISA; } isClass = JKClassNumber;     }
     else if(JK_EXPECT_T([object isKindOfClass:[NSDictionary class]])) { if(workAroundMacOSXABIBreakingBug == NO) { encodeState->fastClassLookup.dictionaryClass = objectISA; } isClass = JKClassDictionary; }
     else if(JK_EXPECT_T([object isKindOfClass:[NSArray      class]])) { if(workAroundMacOSXABIBreakingBug == NO) { encodeState->fastClassLookup.arrayClass      = objectISA; } isClass = JKClassArray;      }
@@ -2629,6 +2873,22 @@ static int jk_encode_add_atom_to_buffer(JKEncodeState *encodeState, void *object
   int _jk_encode_prettyPrint = JK_EXPECT_T((encodeState->serializeOptionFlags & JKSerializeOptionPretty) == 0) ? 0 : 1;
   
   switch(isClass) {
+    case JKClassRaw:
+      {
+          const unsigned char *cStringPtr = (const unsigned char *)CFStringGetCStringPtr((CFStringRef)((JKRawData *)object).data, kCFStringEncodingMacRoman);
+          if(cStringPtr != NULL) {
+              const unsigned char *utf8String = cStringPtr;
+              size_t               utf8Idx    = 0UL;
+              
+              for(utf8Idx = 0UL; utf8String[utf8Idx] != 0U; utf8Idx++) {
+                  encodeState->stringBuffer.bytes.ptr[encodeState->atIndex++] = utf8String[utf8Idx];
+              }
+              NSCParameterAssert((encodeState->atIndex + 1UL) < encodeState->stringBuffer.bytes.length);
+              jk_encode_updateCache(encodeState, cacheSlot, startingAtIndex, encodeCacheObject);
+              return(0);
+          }
+      }
+          break;
     case JKClassString:
       {
         {
@@ -2775,7 +3035,14 @@ static int jk_encode_add_atom_to_buffer(JKEncodeState *encodeState, void *object
         } else {
           void *objects[1024];
           CFArrayGetValues((CFArrayRef)object, CFRangeMake(0L, arrayCount), (const void **)objects);
-          for(idx = 0L; idx < arrayCount; idx++) { if(JK_EXPECT_T(printComma)) { if(JK_EXPECT_F(jk_encode_write1(encodeState, 0L, ","))) { return(1); } } printComma = 1; if(JK_EXPECT_F(jk_encode_add_atom_to_buffer(encodeState, objects[idx]))) { return(1); } }
+          for(idx = 0L; idx < arrayCount; idx++) {
+              if(JK_EXPECT_T(printComma)) {
+                  if(JK_EXPECT_F(jk_encode_write1(encodeState, 0L, ","))) { return(1); }
+              }
+              printComma = 1;
+              
+              if(JK_EXPECT_F(jk_encode_add_atom_to_buffer(encodeState, objects[idx]))) { return(1); }
+          }
         }
         return(jk_encode_write1(encodeState, -1L, "]"));
       }
@@ -3060,6 +3327,21 @@ errorExit:
 }
 
 @end
+
+@implementation NSObject (JSONKitSerializingBlockAdditions)
+
+- (NSData *)JSONDataWithOptions:(JKSerializeOptionFlags)serializeOptions serializeUnsupportedClassesUsingBlock:(id(^)(id object))block error:(NSError **)error
+{
+  return([JKSerializer serializeObject:self options:serializeOptions encodeOption:(JKEncodeOptionAsData | JKEncodeOptionCollectionObj) block:block delegate:NULL selector:NULL error:error]);
+}
+
+- (NSString *)JSONStringWithOptions:(JKSerializeOptionFlags)serializeOptions serializeUnsupportedClassesUsingBlock:(id(^)(id object))block error:(NSError **)error
+{
+    return([JKSerializer serializeObject:self options:serializeOptions encodeOption:(JKEncodeOptionAsString | JKEncodeOptionCollectionObj) block:block delegate:NULL selector:NULL error:error]);
+}
+
+@end
+
 
 #endif // __BLOCKS__
 
