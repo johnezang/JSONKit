@@ -71,7 +71,11 @@
 #ifdef __cplusplus
 extern "C" {
 #endif
-  
+
+@interface PreSerialized : NSObject
+- (NSString *)JSONString;
+- (NSData *)JSONData;
+@end
 
 // For Mac OS X < 10.5.
 #ifndef   NSINTEGER_DEFINED
@@ -207,6 +211,8 @@ typedef struct JKParseState JKParseState; // Opaque internal, private type.
 - (NSData *)JSONDataWithOptions:(JKSerializeOptionFlags)serializeOptions includeQuotes:(BOOL)includeQuotes error:(NSError **)error;
 - (NSString *)JSONString; // Invokes JSONStringWithOptions:JKSerializeOptionNone includeQuotes:YES
 - (NSString *)JSONStringWithOptions:(JKSerializeOptionFlags)serializeOptions includeQuotes:(BOOL)includeQuotes error:(NSError **)error;
+- (PreSerialized *)JSONPreSerialized; // Invokes JSONPreSerializedWithOptions:JKSerializeOptionNone includeQuotes:YES
+- (PreSerialized *)JSONPreSerializedWithOptions:(JKSerializeOptionFlags)serializeOptions includeQuotes:(BOOL)includeQuotes error:(NSError **)error;
 @end
 
 @interface NSArray (JSONKitSerializing)
@@ -216,6 +222,9 @@ typedef struct JKParseState JKParseState; // Opaque internal, private type.
 - (NSString *)JSONString;
 - (NSString *)JSONStringWithOptions:(JKSerializeOptionFlags)serializeOptions error:(NSError **)error;
 - (NSString *)JSONStringWithOptions:(JKSerializeOptionFlags)serializeOptions serializeUnsupportedClassesUsingDelegate:(id)delegate selector:(SEL)selector error:(NSError **)error;
+- (PreSerialized *)JSONPreSerialized;
+- (PreSerialized *)JSONPreSerializedWithOptions:(JKSerializeOptionFlags)serializeOptions error:(NSError **)error;
+- (PreSerialized *)JSONPreSerializedWithOptions:(JKSerializeOptionFlags)serializeOptions serializeUnsupportedClassesUsingDelegate:(id)delegate selector:(SEL)selector error:(NSError **)error;
 @end
 
 @interface NSDictionary (JSONKitSerializing)
@@ -225,6 +234,9 @@ typedef struct JKParseState JKParseState; // Opaque internal, private type.
 - (NSString *)JSONString;
 - (NSString *)JSONStringWithOptions:(JKSerializeOptionFlags)serializeOptions error:(NSError **)error;
 - (NSString *)JSONStringWithOptions:(JKSerializeOptionFlags)serializeOptions serializeUnsupportedClassesUsingDelegate:(id)delegate selector:(SEL)selector error:(NSError **)error;
+- (PreSerialized *)JSONPreSerialized;
+- (PreSerialized *)JSONPreSerializedWithOptions:(JKSerializeOptionFlags)serializeOptions error:(NSError **)error;
+- (PreSerialized *)JSONPreSerializedWithOptions:(JKSerializeOptionFlags)serializeOptions serializeUnsupportedClassesUsingDelegate:(id)delegate selector:(SEL)selector error:(NSError **)error;
 @end
 
 #ifdef __BLOCKS__
@@ -232,16 +244,16 @@ typedef struct JKParseState JKParseState; // Opaque internal, private type.
 @interface NSArray (JSONKitSerializingBlockAdditions)
 - (NSData *)JSONDataWithOptions:(JKSerializeOptionFlags)serializeOptions serializeUnsupportedClassesUsingBlock:(id(^)(id object))block error:(NSError **)error;
 - (NSString *)JSONStringWithOptions:(JKSerializeOptionFlags)serializeOptions serializeUnsupportedClassesUsingBlock:(id(^)(id object))block error:(NSError **)error;
+- (PreSerialized *)JSONPreSerializedWithOptions:(JKSerializeOptionFlags)serializeOptions serializeUnsupportedClassesUsingBlock:(id(^)(id object))block error:(NSError **)error;
 @end
 
 @interface NSDictionary (JSONKitSerializingBlockAdditions)
 - (NSData *)JSONDataWithOptions:(JKSerializeOptionFlags)serializeOptions serializeUnsupportedClassesUsingBlock:(id(^)(id object))block error:(NSError **)error;
 - (NSString *)JSONStringWithOptions:(JKSerializeOptionFlags)serializeOptions serializeUnsupportedClassesUsingBlock:(id(^)(id object))block error:(NSError **)error;
-@end
-  
+- (PreSerialized *)JSONPreSerializedWithOptions:(JKSerializeOptionFlags)serializeOptions serializeUnsupportedClassesUsingBlock:(id(^)(id object))block error:(NSError **)error;
+@end  
 #endif
-
-
+  
 #endif // __OBJC__
 
 #endif // _JSONKIT_H_
