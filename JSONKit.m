@@ -274,6 +274,7 @@ enum {
   JKClassArray      = 3,
   JKClassDictionary = 4,
   JKClassNull       = 5,
+  JKClassPreSerialized = 6,
 };
 
 enum {
@@ -457,6 +458,7 @@ struct JKFastClassLookup {
   void *arrayClass;
   void *dictionaryClass;
   void *nullClass;
+  void *preSerializedClass;
 };
 
 struct JKEncodeCache {
@@ -870,6 +872,15 @@ static void _JKArrayRemoveObjectAtIndex(JKArray *array, NSUInteger objectIndex) 
   return(returnObject);
 }
 
+@end
+
+@interface PreSerialized ()
+{
+  NSData * _data;
+  JKSerializeOptionFlags _serializeOptionFlags;
+}
++(instancetype)preSerializedWithData:(NSData *)data options:(JKSerializeOptionFlags)options;
+@property (readonly, nonatomic) JKSerializeOptionFlags serializeOptionFlags;
 @end
 
 #pragma mark -
@@ -2092,7 +2103,7 @@ static void *jk_object_for_token(JKParseState *parseState) {
   return([self initWithParseOptions:JKParseOptionStrict]);
 }
 
-- (id)initWithParseOptions:(JKParseOptionFlags)parseOptionFlags
+- (id)initWithParseOptiOons:(JKParseOptionFlags)parseOptionFlags
 {
   if((self = [super init]) == NULL) { return(NULL); }
 
@@ -2599,18 +2610,20 @@ static int jk_encode_add_atom_to_buffer(JKEncodeState *encodeState, void *object
   void  *objectISA                      = (JK_EXPECT_F(workAroundMacOSXABIBreakingBug)) ? NULL : *((void **)objectPtr);
   if(JK_EXPECT_F(workAroundMacOSXABIBreakingBug)) { goto slowClassLookup; }
 
-       if(JK_EXPECT_T(objectISA == encodeState->fastClassLookup.stringClass))     { isClass = JKClassString;     }
-  else if(JK_EXPECT_T(objectISA == encodeState->fastClassLookup.numberClass))     { isClass = JKClassNumber;     }
-  else if(JK_EXPECT_T(objectISA == encodeState->fastClassLookup.dictionaryClass)) { isClass = JKClassDictionary; }
-  else if(JK_EXPECT_T(objectISA == encodeState->fastClassLookup.arrayClass))      { isClass = JKClassArray;      }
-  else if(JK_EXPECT_T(objectISA == encodeState->fastClassLookup.nullClass))       { isClass = JKClassNull;       }
-  else {
+       if(JK_EXPECT_T(objectISA == encodeState->fastClassLookup.stringClass))        { isClass = JKClassString;     }
+  else if(JK_EXPECT_T(objectISA == encodeState->fastClassLookup.numberClass))        { isClass = JKClassNumber;        }
+  else if(JK_EXPECT_T(objectISA == encodeState->fastClassLookup.dictionaryClass))    { isClass = JKClassDictionary;    }
+  else if(JK_EXPECT_T(objectISA == encodeState->fastClassLookup.arrayClass))         { isClass = JKClassArray;         }
+  else if(JK_EXPECT_T(objectISA == encodeState->fastClassLookup.nullClass))          { isClass = JKClassNull;          }
+  else if(JK_EXPECT_T(objectISA == encodeState->fastClassLookup.preSerializedClass)) { isClass = JKClassPreSerialized; }
+ else {
   slowClassLookup:
-         if(JK_EXPECT_T([object isKindOfClass:[NSString     class]])) { if(workAroundMacOSXABIBreakingBug == NO) { encodeState->fastClassLookup.stringClass     = objectISA; } isClass = JKClassString;     }
-    else if(JK_EXPECT_T([object isKindOfClass:[NSNumber     class]])) { if(workAroundMacOSXABIBreakingBug == NO) { encodeState->fastClassLookup.numberClass     = objectISA; } isClass = JKClassNumber;     }
-    else if(JK_EXPECT_T([object isKindOfClass:[NSDictionary class]])) { if(workAroundMacOSXABIBreakingBug == NO) { encodeState->fastClassLookup.dictionaryClass = objectISA; } isClass = JKClassDictionary; }
-    else if(JK_EXPECT_T([object isKindOfClass:[NSArray      class]])) { if(workAroundMacOSXABIBreakingBug == NO) { encodeState->fastClassLookup.arrayClass      = objectISA; } isClass = JKClassArray;      }
-    else if(JK_EXPECT_T([object isKindOfClass:[NSNull       class]])) { if(workAroundMacOSXABIBreakingBug == NO) { encodeState->fastClassLookup.nullClass       = objectISA; } isClass = JKClassNull;       }
+         if(JK_EXPECT_T([object isKindOfClass:[NSString      class]])) { if(workAroundMacOSXABIBreakingBug == NO) { encodeState->fastClassLookup.stringClass     = objectISA; } isClass = JKClassString;     }
+    else if(JK_EXPECT_T([object isKindOfClass:[NSNumber      class]])) { if(workAroundMacOSXABIBreakingBug == NO) { encodeState->fastClassLookup.numberClass     = objectISA; } isClass = JKClassNumber;     }
+    else if(JK_EXPECT_T([object isKindOfClass:[NSDictionary  class]])) { if(workAroundMacOSXABIBreakingBug == NO) { encodeState->fastClassLookup.dictionaryClass = objectISA; } isClass = JKClassDictionary; }
+    else if(JK_EXPECT_T([object isKindOfClass:[NSArray       class]])) { if(workAroundMacOSXABIBreakingBug == NO) { encodeState->fastClassLookup.arrayClass      = objectISA; } isClass = JKClassArray;      }
+    else if(JK_EXPECT_T([object isKindOfClass:[NSNull        class]])) { if(workAroundMacOSXABIBreakingBug == NO) { encodeState->fastClassLookup.nullClass       = objectISA; } isClass = JKClassNull;       }
+    else if(JK_EXPECT_T([object isKindOfClass:[PreSerialized class]])) { if(workAroundMacOSXABIBreakingBug == NO) { encodeState->fastClassLookup.preSerializedClass = objectISA; } isClass = JKClassPreSerialized;  }
     else {
       if((rerunningAfterClassFormatter == NO) && (
 #ifdef __BLOCKS__
@@ -2722,6 +2735,23 @@ static int jk_encode_add_atom_to_buffer(JKEncodeState *encodeState, void *object
       }
       break;
 
+    case JKClassPreSerialized:
+    {
+      if(JK_EXPECT_F([object serializeOptionFlags] != encodeState->serializeOptionFlags)) {
+        jk_encode_error(encodeState, @"PreSerialized objects were created with differente serialization options"); return (1); }
+      CFDataRef objBytes = (CFDataRef)[object JSONData];
+      CFIndex bytesLength = CFDataGetLength(objBytes);
+      if(bytesLength >= 0) {
+        if(JK_EXPECT_F(((encodeState->atIndex + (bytesLength * 2UL) + 256UL) > encodeState->stringBuffer.bytes.length)) && JK_EXPECT_F((jk_managedBuffer_resize(&encodeState->stringBuffer, encodeState->atIndex + (bytesLength * 2UL) + 1024UL) == NULL))) { jk_encode_error(encodeState, @"Unable to resize temporary buffer."); return(1); }
+        CFDataGetBytes((CFDataRef)objBytes, CFRangeMake(0, bytesLength), &encodeState->stringBuffer.bytes.ptr[encodeState->atIndex++]);
+        encodeState->atIndex += bytesLength - 1;
+        NSCParameterAssert((encodeState->atIndex + 1UL) < encodeState->stringBuffer.bytes.length);
+        jk_encode_updateCache(encodeState, cacheSlot, startingAtIndex, encodeCacheObject);
+        return(0);
+      }
+    }
+      break;
+    
     case JKClassNumber:
       {
              if(object == (id)kCFBooleanTrue)  { return(jk_encode_writen(encodeState, cacheSlot, startingAtIndex, encodeCacheObject, "true",  4UL)); }
@@ -2952,6 +2982,17 @@ errorExit:
   return([JKSerializer serializeObject:self options:serializeOptions encodeOption:(JKEncodeOptionAsString | ((includeQuotes == NO) ? JKEncodeOptionStringObjTrimQuotes : 0UL) | JKEncodeOptionStringObj) block:NULL delegate:NULL selector:NULL error:error]);
 }
 
+// PreSerialized returning methods...
+- (PreSerialized *)JSONPreSerialized
+{
+  return ([self JSONPreSerializedWithOptions:JKSerializeOptionNone includeQuotes:YES error:NULL]);
+}
+
+- (PreSerialized *)JSONPreSerializedWithOptions:(JKSerializeOptionFlags)serializeOptions includeQuotes:(BOOL)includeQuotes error:(NSError **)error
+{
+  return [PreSerialized preSerializedWithData:[self JSONDataWithOptions:serializeOptions includeQuotes:includeQuotes error:error] options:serializeOptions];
+}
+
 @end
 
 @implementation NSArray (JSONKitSerializing)
@@ -2990,6 +3031,22 @@ errorExit:
   return([JKSerializer serializeObject:self options:serializeOptions encodeOption:(JKEncodeOptionAsString | JKEncodeOptionCollectionObj) block:NULL delegate:delegate selector:selector error:error]);
 }
 
+// PreSerialized returning methods...
+
+- (PreSerialized *)JSONPreSerialized
+{
+  return([PreSerialized preSerializedWithData:[JKSerializer serializeObject:self options:JKSerializeOptionNone encodeOption:(JKEncodeOptionAsData | JKEncodeOptionCollectionObj) block:NULL delegate:NULL selector:NULL error:NULL] options:JKSerializeOptionNone]);
+}
+
+- (PreSerialized *)JSONPreSerializedWithOptions:(JKSerializeOptionFlags)serializeOptions error:(NSError **)error
+{
+  return([PreSerialized preSerializedWithData:[JKSerializer serializeObject:self options:serializeOptions encodeOption:(JKEncodeOptionAsData | JKEncodeOptionCollectionObj) block:NULL delegate:NULL selector:NULL error:error] options:serializeOptions]);
+}
+
+- (PreSerialized *)JSONPreSerializedWithOptions:(JKSerializeOptionFlags)serializeOptions serializeUnsupportedClassesUsingDelegate:(id)delegate selector:(SEL)selector error:(NSError **)error
+{
+  return([PreSerialized preSerializedWithData:[JKSerializer serializeObject:self options:serializeOptions encodeOption:(JKEncodeOptionAsData | JKEncodeOptionCollectionObj) block:NULL delegate:delegate selector:selector error:error] options:serializeOptions]);
+}
 @end
 
 @implementation NSDictionary (JSONKitSerializing)
@@ -3028,6 +3085,22 @@ errorExit:
   return([JKSerializer serializeObject:self options:serializeOptions encodeOption:(JKEncodeOptionAsString | JKEncodeOptionCollectionObj) block:NULL delegate:delegate selector:selector error:error]);
 }
 
+// PreSerialized returning methods...
+
+- (PreSerialized *)JSONPreSerialized
+{
+  return([PreSerialized preSerializedWithData:[JKSerializer serializeObject:self options:JKSerializeOptionNone encodeOption:(JKEncodeOptionAsData | JKEncodeOptionCollectionObj) block:NULL delegate:NULL selector:NULL error:NULL] options:JKSerializeOptionNone]);
+}
+
+- (PreSerialized *)JSONPreSerializedWithOptions:(JKSerializeOptionFlags)serializeOptions error:(NSError **)error
+{
+  return([PreSerialized preSerializedWithData:[JKSerializer serializeObject:self options:serializeOptions encodeOption:(JKEncodeOptionAsData | JKEncodeOptionCollectionObj) block:NULL delegate:NULL selector:NULL error:error] options:serializeOptions]);
+}
+
+- (PreSerialized *)JSONPreSerializedWithOptions:(JKSerializeOptionFlags)serializeOptions serializeUnsupportedClassesUsingDelegate:(id)delegate selector:(SEL)selector error:(NSError **)error
+{
+  return([PreSerialized preSerializedWithData:[JKSerializer serializeObject:self options:serializeOptions encodeOption:(JKEncodeOptionAsData | JKEncodeOptionCollectionObj) block:NULL delegate:delegate selector:selector error:error] options:serializeOptions]);
+}
 @end
 
 
@@ -3045,6 +3118,10 @@ errorExit:
   return([JKSerializer serializeObject:self options:serializeOptions encodeOption:(JKEncodeOptionAsString | JKEncodeOptionCollectionObj) block:block delegate:NULL selector:NULL error:error]);
 }
 
+- (PreSerialized *)JSONPreSerializedWithOptions:(JKSerializeOptionFlags)serializeOptions serializeUnsupportedClassesUsingBlock:(id(^)(id object))block error:(NSError **)error
+{
+  return([PreSerialized preSerializedWithData:[JKSerializer serializeObject:self options:serializeOptions encodeOption:(JKEncodeOptionAsData | JKEncodeOptionCollectionObj) block:block delegate:NULL selector:NULL error:error] options:serializeOptions]);
+}
 @end
 
 @implementation NSDictionary (JSONKitSerializingBlockAdditions)
@@ -3059,7 +3136,48 @@ errorExit:
   return([JKSerializer serializeObject:self options:serializeOptions encodeOption:(JKEncodeOptionAsString | JKEncodeOptionCollectionObj) block:block delegate:NULL selector:NULL error:error]);
 }
 
+- (PreSerialized *)JSONPreSerializedWithOptions:(JKSerializeOptionFlags)serializeOptions serializeUnsupportedClassesUsingBlock:(id(^)(id object))block error:(NSError **)error
+{
+  return([PreSerialized preSerializedWithData:[JKSerializer serializeObject:self options:serializeOptions encodeOption:(JKEncodeOptionAsData | JKEncodeOptionCollectionObj) block:block delegate:NULL selector:NULL error:error] options:serializeOptions]);
+}
 @end
 
 #endif // __BLOCKS__
+
+@implementation PreSerialized
+-(instancetype)initWithData:(NSData *)data options:(JKSerializeOptionFlags)options
+{
+  if (self = [super init]) {
+    _data = [data retain];
+    _serializeOptionFlags = options;
+  }
+  return self;
+}
+
++(instancetype)preSerializedWithData:(NSData *)data options:(JKSerializeOptionFlags)options
+{
+  return [[[self alloc] initWithData:data options:options] autorelease];
+}
+
+-(JKSerializeOptionFlags)serializeOptionFlags
+{
+  return _serializeOptionFlags;
+}
+
+-(NSString *)JSONString
+{
+  return [[[NSString alloc] initWithData:_data encoding:NSUTF8StringEncoding] autorelease];
+}
+
+-(NSData *)JSONData
+{
+  return _data;
+}
+
+-(void)dealloc
+{
+  [_data release];
+  [super dealloc];
+}
+@end
 
