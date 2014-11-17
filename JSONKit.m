@@ -2596,7 +2596,7 @@ JK_STATIC_INLINE BOOL jk_is_tagged_pointer(const void *objectPtr)
 #if JK_SUPPORT_MSB_TAGGED_POINTERS
   return(((intptr_t)objectPtr) < 0);
 #else
-  return(((uintptr_t)object) & 0x1);
+  return(((uintptr_t)objectPtr) & 0x1);
 #endif
 }
 
