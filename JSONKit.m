@@ -2879,7 +2879,7 @@ static int jk_encode_add_atom_to_buffer(JKEncodeState *encodeState, const void *
       {
         int     printComma      = 0;
         CFIndex dictionaryCount = CFDictionaryGetCount((CFDictionaryRef)object), idx = 0L;
-        id      enumerateObject = JK_EXPECT_F(_jk_encode_prettyPrint) ? [[object allKeys] sortedArrayUsingSelector:@selector(compare:)] : object;
+        id      enumerateObject = JK_EXPECT_F(_jk_encode_prettyPrint) ? [[(NSDictionary*)object allKeys] sortedArrayUsingSelector:@selector(compare:)] : object;
 
         if(JK_EXPECT_F(jk_encode_write1(encodeState, 1L, "{"))) { return(1); }
         if(JK_EXPECT_F(_jk_encode_prettyPrint) || JK_EXPECT_F(dictionaryCount > 1024L)) {
