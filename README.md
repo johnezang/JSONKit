@@ -15,7 +15,7 @@ Copyright &copy; 2011, John Engelhart.
 * Benchmarking was performed on a MacBook Pro with a 2.66GHz Core 2.
 * All JSON libraries were compiled with `gcc-4.2 -DNS_BLOCK_ASSERTIONS -O3 -arch x86_64`.
 * Timing results are the average of 1,000 iterations of the user + system time reported by [`getrusage`][getrusage].
-* The JSON used was [`twitter_public_timeline.json`](https://github.com/samsoffes/json-benchmarks/blob/master/Resources/twitter_public_timeline.json) from [samsoffes / json-benchmarks](https://github.com/samsoffes/json-benchmarks).
+* The JSON used was [`twitter_public_timeline.json`](https://github.com/soffes/json-benchmarks/blob/master/Resources/twitter_public_timeline.json) from [soffes / json-benchmarks](https://github.com/soffes/json-benchmarks).
 * Since the `.plist` format does not support serializing [`NSNull`][NSNull], the `null` values in the original JSON were changed to `"null"`.
 * The [experimental](https://github.com/johnezang/JSONKit/tree/experimental) branch contains the `gzip` compression changes.
     * JSONKit automagically links to `libz.dylib` on the fly at run time&ndash; no manual linking required.
