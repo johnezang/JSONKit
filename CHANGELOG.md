@@ -294,7 +294,7 @@
 *   Removed a lot of internal and private data structures from `JSONKit.h` and put them in `JSONKit.m`.
 *   Modified the way floating point values are serialized.  Previously, the [`printf`][printf] format conversion `%.16g` was used.  This was changed to `%.17g` which should theoretically allow for up to a full `float`, or [IEEE 754 Single 32-bit floating-point][Single Precision], of precision when converting floating point values to decimal representation. 
 *   The usual sundry of inconsequential tidies and what not, such as updating the `README.md`, etc.
-*   The catagory additions to the Cocoa classes were changed from `JSONKit` to `JSONKitDeserializing` and `JSONKitSerializing`, as appropriate.
+*   The category additions to the Cocoa classes were changed from `JSONKit` to `JSONKitDeserializing` and `JSONKitSerializing`, as appropriate.
 
 ## Version 1.3 2011/05/02
 
