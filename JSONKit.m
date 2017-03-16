@@ -2203,6 +2203,9 @@ static id _JKParseUTF8String(JKParseState *parseState, BOOL mutableCollections, 
 #pragma mark Deprecated as of v1.4
 ////////////
 
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wdeprecated-implementations"
+
 // Deprecated in JSONKit v1.4.  Use objectWithUTF8String:length: instead.
 - (id)parseUTF8String:(const unsigned char *)string length:(size_t)length
 {
@@ -2226,6 +2229,8 @@ static id _JKParseUTF8String(JKParseState *parseState, BOOL mutableCollections, 
 {
   return([self objectWithData:jsonData error:error]);
 }
+
+#pragma clang diagnostic pop
 
 ////////////
 #pragma mark Methods that return immutable collection objects
