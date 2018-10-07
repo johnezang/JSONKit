@@ -245,7 +245,7 @@ Example       | Result            | Argument
 ```
 
 
-#### NSString Interface
+#### NSString Interfaces
 
 ```objective-c
 - (NSData *)JSONData;
