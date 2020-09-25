@@ -254,7 +254,7 @@ Example       | Result            | Argument
 - (NSString *)JSONStringWithOptions:(JKSerializeOptionFlags)serializeOptions includeQuotes:(BOOL)includeQuotes error:(NSError **)error;
 ```
 
-#### JKSerializeOptionFlags
+#### JKSerializeOptionFlags ####
 
 <table>
   <tr><th>Serializing Option</th><th>Description</th></tr>
