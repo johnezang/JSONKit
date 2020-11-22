@@ -234,6 +234,18 @@
 #   define JK_SUPPORT_MSB_TAGGED_POINTERS 1
 #endif
 
+#define JK_STATIC_CLASS_REF(CLASSNAME)         ((Class)&OBJC_CLASS_$_ ## CLASSNAME)
+#if __OBJC2__
+#define JK_DECLARE_STATIC_CLASS_REF(CLASSNAME) extern void OBJC_CLASS_$_ ## CLASSNAME
+#else
+#define JK_DECLARE_STATIC_CLASS_REF(CLASSNAME) extern void OBJC_CLASS_$_ ## CLASSNAME __asm(".objc_class_name_" # CLASSNAME)
+#endif
+
+JK_DECLARE_STATIC_CLASS_REF(NSString);
+JK_DECLARE_STATIC_CLASS_REF(NSNumber);
+JK_DECLARE_STATIC_CLASS_REF(NSDictionary);
+JK_DECLARE_STATIC_CLASS_REF(NSArray);
+JK_DECLARE_STATIC_CLASS_REF(NSNull);
 
 @class JKArray, JKDictionaryEnumerator, JKDictionary;
 
@@ -359,7 +371,6 @@ typedef struct JKConstBuffer     JKConstBuffer;
 typedef struct JKConstPtrRange   JKConstPtrRange;
 typedef struct JKRange           JKRange;
 typedef struct JKManagedBuffer   JKManagedBuffer;
-typedef struct JKFastClassLookup JKFastClassLookup;
 #if JK_SUPPORT_TAGGED_POINTERS
 typedef struct JKFastTagLookup   JKFastTagLookup;
 #endif
@@ -466,14 +477,6 @@ struct JKParseState {
   BOOL                mutableCollections;
 };
 
-struct JKFastClassLookup {
-  void *stringClass;
-  void *numberClass;
-  void *arrayClass;
-  void *dictionaryClass;
-  void *nullClass;
-};
-
 #if JK_SUPPORT_TAGGED_POINTERS
 struct JKFastTagLookup {
   uintptr_t stringClass;
@@ -494,7 +497,6 @@ struct JKEncodeState {
   JKManagedBuffer         utf8ConversionBuffer;
   JKManagedBuffer         stringBuffer;
   size_t                  atIndex;
-  JKFastClassLookup       fastClassLookup;
 #if JK_SUPPORT_TAGGED_POINTERS
   JKFastTagLookup         fastTagLookup;
 #endif
@@ -2621,29 +2623,20 @@ JK_STATIC_INLINE int jk_object_class(JKEncodeState *encodeState, id object) {
     else if(JK_EXPECT_T(objectTag == encodeState->fastTagLookup.arrayClass))      { return(JKClassArray);      }
     else if(JK_EXPECT_T(objectTag == encodeState->fastTagLookup.nullClass))       { return(JKClassNull);       }
     else {
-           if(JK_EXPECT_T([object isKindOfClass:[NSString     class]])) { encodeState->fastTagLookup.stringClass     = objectTag; return(JKClassString);     }
-      else if(JK_EXPECT_T([object isKindOfClass:[NSNumber     class]])) { encodeState->fastTagLookup.numberClass     = objectTag; return(JKClassNumber);     }
-      else if(JK_EXPECT_T([object isKindOfClass:[NSDictionary class]])) { encodeState->fastTagLookup.dictionaryClass = objectTag; return(JKClassDictionary); }
-      else if(JK_EXPECT_T([object isKindOfClass:[NSArray      class]])) { encodeState->fastTagLookup.arrayClass      = objectTag; return(JKClassArray);      }
-      else if(JK_EXPECT_T([object isKindOfClass:[NSNull       class]])) { encodeState->fastTagLookup.nullClass       = objectTag; return(JKClassNull);       }
+           if(JK_EXPECT_T([object isKindOfClass:JK_STATIC_CLASS_REF(NSString)]))     { encodeState->fastTagLookup.stringClass     = objectTag; return(JKClassString);     }
+      else if(JK_EXPECT_T([object isKindOfClass:JK_STATIC_CLASS_REF(NSNumber)]))     { encodeState->fastTagLookup.numberClass     = objectTag; return(JKClassNumber);     }
+      else if(JK_EXPECT_T([object isKindOfClass:JK_STATIC_CLASS_REF(NSDictionary)])) { encodeState->fastTagLookup.dictionaryClass = objectTag; return(JKClassDictionary); }
+      else if(JK_EXPECT_T([object isKindOfClass:JK_STATIC_CLASS_REF(NSArray)]))      { encodeState->fastTagLookup.arrayClass      = objectTag; return(JKClassArray);      }
+      else if(JK_EXPECT_T([object isKindOfClass:JK_STATIC_CLASS_REF(NSNull)]))       { encodeState->fastTagLookup.nullClass       = objectTag; return(JKClassNull);       }
     }
   }
   else {
 #endif
-    void     *objectISA = *((void **)object);
-    
-         if(JK_EXPECT_T(objectISA == encodeState->fastClassLookup.stringClass))     { return(JKClassString);     }
-    else if(JK_EXPECT_T(objectISA == encodeState->fastClassLookup.numberClass))     { return(JKClassNumber);     }
-    else if(JK_EXPECT_T(objectISA == encodeState->fastClassLookup.dictionaryClass)) { return(JKClassDictionary); }
-    else if(JK_EXPECT_T(objectISA == encodeState->fastClassLookup.arrayClass))      { return(JKClassArray);      }
-    else if(JK_EXPECT_T(objectISA == encodeState->fastClassLookup.nullClass))       { return(JKClassNull);       }
-    else {
-           if(JK_EXPECT_T([object isKindOfClass:[NSString     class]])) { encodeState->fastClassLookup.stringClass     = objectISA; return(JKClassString);     }
-      else if(JK_EXPECT_T([object isKindOfClass:[NSNumber     class]])) { encodeState->fastClassLookup.numberClass     = objectISA; return(JKClassNumber);     }
-      else if(JK_EXPECT_T([object isKindOfClass:[NSDictionary class]])) { encodeState->fastClassLookup.dictionaryClass = objectISA; return(JKClassDictionary); }
-      else if(JK_EXPECT_T([object isKindOfClass:[NSArray      class]])) { encodeState->fastClassLookup.arrayClass      = objectISA; return(JKClassArray);      }
-      else if(JK_EXPECT_T([object isKindOfClass:[NSNull       class]])) { encodeState->fastClassLookup.nullClass       = objectISA; return(JKClassNull);       }
-    }
+         if(JK_EXPECT_T([object isKindOfClass:JK_STATIC_CLASS_REF(NSString)]))     { return(JKClassString);     }
+    else if(JK_EXPECT_T([object isKindOfClass:JK_STATIC_CLASS_REF(NSNumber)]))     { return(JKClassNumber);     }
+    else if(JK_EXPECT_T([object isKindOfClass:JK_STATIC_CLASS_REF(NSDictionary)])) { return(JKClassDictionary); }
+    else if(JK_EXPECT_T([object isKindOfClass:JK_STATIC_CLASS_REF(NSArray)]))      { return(JKClassArray);      }
+    else if(JK_EXPECT_T([object isKindOfClass:JK_STATIC_CLASS_REF(NSNull)]))       { return(JKClassNull);       }
 #if JK_SUPPORT_TAGGED_POINTERS
   }
 #endif
@@ -2656,14 +2649,11 @@ JK_STATIC_INLINE BOOL jk_object_is_string(JKEncodeState *encodeState, id object)
     uintptr_t objectTag = jk_get_tagged_pointer_tag(object);
     
     if(JK_EXPECT_T(objectTag == encodeState->fastTagLookup.stringClass))   {                                                       return(YES); }
-    else if(JK_EXPECT_T([object isKindOfClass:[NSString class]]))          { encodeState->fastTagLookup.stringClass   = objectTag; return(YES); }
+    else if(JK_EXPECT_T([object isKindOfClass:JK_STATIC_CLASS_REF(NSString)]))       { encodeState->fastTagLookup.stringClass   = objectTag; return(YES); }
   }
   else {
 #endif
-    void     *objectISA = *((void **)object);
-    
-    if(JK_EXPECT_T(objectISA == encodeState->fastClassLookup.stringClass)) {                                                       return(YES); }
-    else if(JK_EXPECT_T([object isKindOfClass:[NSString class]]))          { encodeState->fastClassLookup.stringClass = objectISA; return(YES); }
+    if(JK_EXPECT_T([object isKindOfClass:JK_STATIC_CLASS_REF(NSString)]))  {                                                       return(YES); }
 #if JK_SUPPORT_TAGGED_POINTERS
   }
 #endif
@@ -2963,8 +2953,8 @@ static int jk_encode_add_atom_to_buffer(JKEncodeState *encodeState, const void *
   unsigned char stackUTF8Buffer[JK_UTF8BUFFER_SIZE] JK_ALIGNED(64);
   jk_managedBuffer_setToStackBuffer(&encodeState->utf8ConversionBuffer, stackUTF8Buffer, sizeof(stackUTF8Buffer));
 
-  if(((encodeOption & JKEncodeOptionCollectionObj) != 0UL) && (([object isKindOfClass:[NSArray  class]] == NO) && ([object isKindOfClass:[NSDictionary class]] == NO))) { jk_encode_error(encodeState, @"Unable to serialize object class %@, expected a NSArray or NSDictionary.", NSStringFromClass([object class])); goto errorExit; }
-  if(((encodeOption & JKEncodeOptionStringObj)     != 0UL) &&  ([object isKindOfClass:[NSString class]] == NO))                                                         { jk_encode_error(encodeState, @"Unable to serialize object class %@, expected a NSString.", NSStringFromClass([object class])); goto errorExit; }
+  if(((encodeOption & JKEncodeOptionCollectionObj) != 0UL) && (([object isKindOfClass:JK_STATIC_CLASS_REF(NSArray)] == NO) && ([object isKindOfClass:JK_STATIC_CLASS_REF(NSDictionary)] == NO))) { jk_encode_error(encodeState, @"Unable to serialize object class %@, expected a NSArray or NSDictionary.", NSStringFromClass([object class])); goto errorExit; }
+  if(((encodeOption & JKEncodeOptionStringObj)     != 0UL) &&  ([object isKindOfClass:JK_STATIC_CLASS_REF(NSString)] == NO))                                                         { jk_encode_error(encodeState, @"Unable to serialize object class %@, expected a NSString.", NSStringFromClass([object class])); goto errorExit; }
 
   if(jk_encode_add_atom_to_buffer(encodeState, object) == 0) {
     BOOL stackBuffer = ((encodeState->stringBuffer.flags & JKManagedBufferMustFree) == 0UL) ? YES : NO;
