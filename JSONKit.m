@@ -109,6 +109,8 @@
 
 #import "JSONKit.h"
 
+#include <Availability.h>
+
 //#include <CoreFoundation/CoreFoundation.h>
 #include <CoreFoundation/CFString.h>
 #include <CoreFoundation/CFArray.h>
@@ -228,10 +230,22 @@
 #   define JK_SUPPORT_TAGGED_POINTERS 1
 #endif
 
-#if !JK_SUPPORT_TAGGED_POINTERS  ||  !TARGET_OS_IPHONE
+#if !JK_SUPPORT_TAGGED_POINTERS  ||  ((TARGET_OS_OSX || TARGET_OS_MACCATALYST) && __x86_64__)
 #   define JK_SUPPORT_MSB_TAGGED_POINTERS 0
 #else
 #   define JK_SUPPORT_MSB_TAGGED_POINTERS 1
+#endif
+
+#if !JK_SUPPORT_MSB_TAGGED_POINTERS ||                      \
+    (defined(__IPHONE_OS_VERSION_MIN_REQUIRED) &&           \
+     (__IPHONE_OS_VERSION_MIN_REQUIRED < __IPHONE_14_0)) || \
+    (defined(__WATCH_OS_VERSION_MIN_REQUIRED) &&            \
+     (__WATCH_OS_VERSION_MIN_REQUIRED < __WATCHOS_7_0)) ||  \
+    (defined(__TV_OS_VERSION_MIN_REQUIRED) &&               \
+     (__TV_OS_VERSION_MIN_REQUIRED < __TVOS_14_0))
+#   define JK_SUPPORT_SPLIT_TAGGED_POINTERS 0
+#else
+#   define JK_SUPPORT_SPLIT_TAGGED_POINTERS 1
 #endif
 
 #define JK_STATIC_CLASS_REF(CLASSNAME)            ((Class)&OBJC_CLASS_$_ ## CLASSNAME)
@@ -481,9 +495,6 @@ struct JKParseState {
 struct JKFastTagLookup {
   uintptr_t stringClass;
   uintptr_t numberClass;
-  uintptr_t arrayClass;
-  uintptr_t dictionaryClass;
-  uintptr_t nullClass;
 };
 #endif
 
@@ -2593,8 +2604,7 @@ JK_STATIC_INLINE JKHash jk_encode_object_hash(const void *objectPtr) {
 // XXX XXX XXX XXX
 
 #if JK_SUPPORT_TAGGED_POINTERS
-JK_STATIC_INLINE BOOL jk_is_tagged_pointer(const void *objectPtr)
-{
+JK_STATIC_INLINE BOOL jk_is_tagged_pointer(const void *objectPtr) {
 #if JK_SUPPORT_MSB_TAGGED_POINTERS
   return(((intptr_t)objectPtr) < 0);
 #else
@@ -2602,10 +2612,29 @@ JK_STATIC_INLINE BOOL jk_is_tagged_pointer(const void *objectPtr)
 #endif
 }
 
-JK_STATIC_INLINE uintptr_t jk_get_tagged_pointer_tag(const void *objectPtr)
-{
-#if JK_SUPPORT_MSB_TAGGED_POINTERS
+#if !JK_SUPPORT_SPLIT_TAGGED_POINTERS && JK_SUPPORT_MSB_TAGGED_POINTERS
+typedef uintptr_t (*jk_get_tagged_pointer_tag_t)(const void *objectPtr);
+
+static uintptr_t jk_get_split_tagged_pointer_tag(const void *objectPtr) {
+  return(((uintptr_t)objectPtr) & 0x07);
+}
+
+static uintptr_t jk_get_msb_tagged_pointer_tag(const void *objectPtr) {
   return(((uintptr_t)objectPtr) >> 60);
+}
+
+static jk_get_tagged_pointer_tag_t jk_get_tagged_pointer_tag_func;
+static __attribute__((constructor)) void jk_get_tagged_pointer_tag_init(void) {
+  if(@available(iOS 14.0, watchOS 7.0, tvOS 14.0, *)) { jk_get_tagged_pointer_tag_func = jk_get_split_tagged_pointer_tag; }
+  else                                                { jk_get_tagged_pointer_tag_func = jk_get_msb_tagged_pointer_tag; }
+}
+#endif
+
+JK_STATIC_INLINE uintptr_t jk_get_tagged_pointer_tag(const void *objectPtr) {
+#if JK_SUPPORT_SPLIT_TAGGED_POINTERS
+  return(((uintptr_t)objectPtr) & 0x07);
+#elif JK_SUPPORT_MSB_TAGGED_POINTERS
+  return jk_get_tagged_pointer_tag_func(objectPtr);
 #else
   return(((uintptr_t)objectPtr) & 0x0F);
 #endif
@@ -2619,15 +2648,9 @@ JK_STATIC_INLINE int jk_object_class(JKEncodeState *encodeState, id object) {
     
          if(JK_EXPECT_T(objectTag == encodeState->fastTagLookup.stringClass))     { return(JKClassString);     }
     else if(JK_EXPECT_T(objectTag == encodeState->fastTagLookup.numberClass))     { return(JKClassNumber);     }
-    else if(JK_EXPECT_T(objectTag == encodeState->fastTagLookup.dictionaryClass)) { return(JKClassDictionary); }
-    else if(JK_EXPECT_T(objectTag == encodeState->fastTagLookup.arrayClass))      { return(JKClassArray);      }
-    else if(JK_EXPECT_T(objectTag == encodeState->fastTagLookup.nullClass))       { return(JKClassNull);       }
     else {
            if(JK_EXPECT_T([object isKindOfClass:JK_STATIC_CLASS_REF(NSString)]))     { encodeState->fastTagLookup.stringClass     = objectTag; return(JKClassString);     }
       else if(JK_EXPECT_T([object isKindOfClass:JK_STATIC_CLASS_REF(NSNumber)]))     { encodeState->fastTagLookup.numberClass     = objectTag; return(JKClassNumber);     }
-      else if(JK_EXPECT_T([object isKindOfClass:JK_STATIC_CLASS_REF(NSDictionary)])) { encodeState->fastTagLookup.dictionaryClass = objectTag; return(JKClassDictionary); }
-      else if(JK_EXPECT_T([object isKindOfClass:JK_STATIC_CLASS_REF(NSArray)]))      { encodeState->fastTagLookup.arrayClass      = objectTag; return(JKClassArray);      }
-      else if(JK_EXPECT_T([object isKindOfClass:JK_STATIC_CLASS_REF(NSNull)]))       { encodeState->fastTagLookup.nullClass       = objectTag; return(JKClassNull);       }
     }
   }
   else {
