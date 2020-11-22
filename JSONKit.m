@@ -1098,18 +1098,26 @@ static JKHashTableEntry *_JKDictionaryHashTableEntryForKey(JKDictionary *diction
   return((entryForKey != NULL) ? entryForKey->object : NULL);
 }
 
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wdeprecated-implementations"
 - (void)getObjects:(id *)objects andKeys:(id *)keys
+#pragma clang diagnostic pop
 {
-  NSParameterAssert((entry != NULL) && (count <= capacity));
-  NSUInteger atEntry = 0UL; NSUInteger arrayIdx = 0UL;
-  for(atEntry = 0UL; atEntry < capacity; atEntry++) {
-    if(JK_EXPECT_T(entry[atEntry].key != NULL)) {
-      NSCParameterAssert((entry[atEntry].object != NULL) && (arrayIdx < count));
-      if(JK_EXPECT_T(keys    != NULL)) { keys[arrayIdx]    = entry[atEntry].key;    }
-      if(JK_EXPECT_T(objects != NULL)) { objects[arrayIdx] = entry[atEntry].object; }
-      arrayIdx++;
+  return [self getObjects:objects andKeys:keys count:count];
+}
+
+- (void)getObjects:(id *)objects andKeys:(id *)keys count:(NSUInteger)arrayCount
+{
+    NSParameterAssert((entry != NULL) && (count <= capacity) && (arrayCount <= count));
+    NSUInteger atEntry = 0UL; NSUInteger arrayIdx = 0UL;
+    for(atEntry = 0UL; atEntry < capacity && arrayIdx < arrayCount; atEntry++) {
+        if(JK_EXPECT_T(entry[atEntry].key != NULL)) {
+            NSCParameterAssert((entry[atEntry].object != NULL) && (arrayIdx < count));
+            if(JK_EXPECT_T(keys    != NULL)) { keys[arrayIdx]    = entry[atEntry].key;    }
+            if(JK_EXPECT_T(objects != NULL)) { objects[arrayIdx] = entry[atEntry].object; }
+            arrayIdx++;
+        }
     }
-  }
 }
 
 - (NSUInteger)countByEnumeratingWithState:(NSFastEnumerationState *)state objects:(id *)stackbuf count:(NSUInteger)len
