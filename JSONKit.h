@@ -6,7 +6,7 @@
 //
 
 /*
- Copyright (c) 2011, John Engelhart
+ Copyright (c) 2011 liu, John Engelhart
  
  All rights reserved.
  
